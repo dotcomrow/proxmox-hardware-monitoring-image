@@ -19,8 +19,8 @@ prometheus.remote_write "grafana" {
   endpoint {
     url = "https://prometheus-prod-56-prod-us-east-2.grafana.net/api/prom/push"
     basic_auth {
-      username = "GRAFANA_USERNAME_PLACEHOLDER"
-      password = "GRAFANA_API_KEY_PLACEHOLDER"
+      username = "2361797"
+      password = "glc_eyJvIjoiMTM5NDAyMCIsIm4iOiJzdGFjay0xMjE4Nzc5LWludGVncmF0aW9uLXN1bmNvYXN0LXN5c3RlbXMtazhzLWNsdXN0ZXItdG9rZW4tc3VuY29hc3Qtc3lzdGVtcy1rOHMtY2x1c3Rlci10b2tlbiIsImsiOiI5azVSR0w1OHVYeU9FdDM2VDc0eU0zMnkiLCJtIjp7InIiOiJwcm9kLXVzLWVhc3QtMCJ9fQ=="
     }
   }
 }

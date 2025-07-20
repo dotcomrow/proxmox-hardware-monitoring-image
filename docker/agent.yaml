@@ -1,0 +1,26 @@
+local.file_match "dell_metrics" {
+  path_targets = [{
+    path = "/opt/dell-exporter/metrics.prom",
+  }]
+}
+
+prometheus.scrape "dell_exporter" {
+  scrape_interval = "60s"
+  targets = [{
+    __address__ = "localhost",
+    __scheme__ = "http",
+    job = "dell_exporter",
+  }]
+
+  forward_to = [prometheus.remote_write.grafana.receiver]
+}
+
+prometheus.remote_write "grafana" {
+  endpoint {
+    url = "https://prometheus-prod-56-prod-us-east-2.grafana.net/api/prom/push"
+    basic_auth {
+      username = "GRAFANA_USERNAME_PLACEHOLDER"
+      password = "GRAFANA_API_KEY_PLACEHOLDER"
+    }
+  }
+}

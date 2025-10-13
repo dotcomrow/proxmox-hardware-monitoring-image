@@ -29,40 +29,32 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@ff7abcd0c3c05ccf6adc123a8cd1fd4fb30fb493
 
-    - name: Setup Terraform
-      uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd
-      with:
-        cli_config_credentials_token: ${{ env.TF_API_TOKEN }}
-
     - name: Fetch Grafana Token from Terraform Cloud
       id: fetch-token
       run: |
-        # Create a temporary Terraform configuration to fetch the variable
-        cat > fetch_vars.tf << 'EOF'
-        terraform {
-          cloud {
-            organization = "${{ env.TF_CLOUD_ORGANIZATION }}"
-            workspaces {
-              name = "k8s-cluster-grafana"
-            }
-          }
-        }
-
-        variable "grafana_service_account_token" {
-          description = "Grafana service account token from K8S Cluster Variables"
-          type        = string
-          sensitive   = true
-        }
-
-        output "grafana_token" {
-          value     = var.grafana_service_account_token
-          sensitive = true
-        }
-        EOF
-
-        # Initialize and get the token
-        terraform init
-        GRAFANA_TOKEN=$(terraform output -raw grafana_token)
+        # Get workspace ID first
+        WORKSPACE_ID=$(curl -s \
+          --header "Authorization: Bearer ${{ env.TF_API_TOKEN }}" \
+          --header "Content-Type: application/vnd.api+json" \
+          "https://app.terraform.io/api/v2/organizations/${{ env.TF_CLOUD_ORGANIZATION }}/workspaces/k8s-cluster-grafana" \
+          | jq -r '.data.id')
+        
+        echo "Workspace ID: $WORKSPACE_ID"
+        
+        # Get all variables for the workspace
+        VARIABLES_RESPONSE=$(curl -s \
+          --header "Authorization: Bearer ${{ env.TF_API_TOKEN }}" \
+          --header "Content-Type: application/vnd.api+json" \
+          "https://app.terraform.io/api/v2/workspaces/$WORKSPACE_ID/vars")
+        
+        # Find the grafana_service_account_token variable
+        GRAFANA_TOKEN=$(echo "$VARIABLES_RESPONSE" | jq -r '.data[] | select(.attributes.key == "grafana_service_account_token") | .attributes.value')
+        
+        if [ "$GRAFANA_TOKEN" == "null" ] || [ -z "$GRAFANA_TOKEN" ]; then
+          echo "Error: grafana_service_account_token not found in workspace variables"
+          exit 1
+        fi
+        
         echo "::add-mask::$GRAFANA_TOKEN"
         echo "grafana_token=$GRAFANA_TOKEN" >> $GITHUB_OUTPUT
 
@@ -70,11 +62,6 @@ jobs:
       run: |
         # Replace the hardcoded token in agent.yaml with the fetched token
         sed -i 's/password = ".*"/password = "${{ steps.fetch-token.outputs.grafana_token }}"/' docker/agent.yaml
-
-    - name: Cleanup Terraform files
-      run: |
-        rm -f fetch_vars.tf
-        rm -rf .terraform*
 
     - name: Log in to GitHub Container Registry
       uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef

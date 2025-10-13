@@ -31,6 +31,8 @@ jobs:
 
     - name: Setup Terraform
       uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd
+      with:
+        cli_config_credentials_token: ${{ env.TF_API_TOKEN }}
 
     - name: Fetch Grafana Token from Terraform Cloud
       id: fetch-token
@@ -39,6 +41,7 @@ jobs:
         cat > fetch_vars.tf << 'EOF'
         terraform {
           cloud {
+            organization = "${{ env.TF_CLOUD_ORGANIZATION }}"
             workspaces {
               name = "k8s-cluster-grafana"
             }

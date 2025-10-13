@@ -32,26 +32,38 @@ jobs:
     - name: Fetch Grafana Token from Terraform Cloud
       id: fetch-token
       run: |
-        # Get workspace ID first
-        WORKSPACE_ID=$(curl -s \
+        # Get all variable sets for the organization
+        echo "Fetching variable sets for organization: ${{ env.TF_CLOUD_ORGANIZATION }}"
+        VARSETS_RESPONSE=$(curl -s \
           --header "Authorization: Bearer ${{ env.TF_API_TOKEN }}" \
           --header "Content-Type: application/vnd.api+json" \
-          "https://app.terraform.io/api/v2/organizations/${{ env.TF_CLOUD_ORGANIZATION }}/workspaces/k8s-cluster-grafana" \
-          | jq -r '.data.id')
+          "https://app.terraform.io/api/v2/organizations/${{ env.TF_CLOUD_ORGANIZATION }}/varsets")
         
-        echo "Workspace ID: $WORKSPACE_ID"
+        # Find the "K8S Cluster Variables" variable set
+        VARSET_ID=$(echo "$VARSETS_RESPONSE" | jq -r '.data[] | select(.attributes.name == "K8S Cluster Variables") | .id')
         
-        # Get all variables for the workspace
+        if [ "$VARSET_ID" == "null" ] || [ -z "$VARSET_ID" ]; then
+          echo "Error: Variable set 'K8S Cluster Variables' not found"
+          echo "Available variable sets:"
+          echo "$VARSETS_RESPONSE" | jq -r '.data[] | .attributes.name'
+          exit 1
+        fi
+        
+        echo "Found variable set ID: $VARSET_ID"
+        
+        # Get variables from the variable set
         VARIABLES_RESPONSE=$(curl -s \
           --header "Authorization: Bearer ${{ env.TF_API_TOKEN }}" \
           --header "Content-Type: application/vnd.api+json" \
-          "https://app.terraform.io/api/v2/workspaces/$WORKSPACE_ID/vars")
+          "https://app.terraform.io/api/v2/varsets/$VARSET_ID/relationships/vars")
         
         # Find the grafana_service_account_token variable
         GRAFANA_TOKEN=$(echo "$VARIABLES_RESPONSE" | jq -r '.data[] | select(.attributes.key == "grafana_service_account_token") | .attributes.value')
         
         if [ "$GRAFANA_TOKEN" == "null" ] || [ -z "$GRAFANA_TOKEN" ]; then
-          echo "Error: grafana_service_account_token not found in workspace variables"
+          echo "Error: grafana_service_account_token not found in variable set"
+          echo "Available variables in set:"
+          echo "$VARIABLES_RESPONSE" | jq -r '.data[] | .attributes.key'
           exit 1
         fi
         

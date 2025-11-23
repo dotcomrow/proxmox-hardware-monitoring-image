@@ -20,7 +20,7 @@ prometheus.remote_write "grafana" {
     url = "https://prometheus-prod-56-prod-us-east-2.grafana.net/api/prom/push"
     basic_auth {
       username = "2361797"
-      password = "REPLACE_ME"  # fetched from TF Cloud in GitHub Actions
+      password = "GRAFANA_API_KEY_PLACEHOLDER"
     }
   }
 }

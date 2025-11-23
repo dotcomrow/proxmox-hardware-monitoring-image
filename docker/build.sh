@@ -1,2 +1,2 @@
 #!/bin/bash
-docker build -t dell-hardware-exporter:latest .
+docker build --platform=linux/amd64 -t dell-hardware-exporter:latest .

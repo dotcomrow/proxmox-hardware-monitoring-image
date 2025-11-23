@@ -1,4 +1,13 @@
-FROM rockylinux:8
+FROM --platform=linux/amd64 rockylinux:8
+
+# OMSA binaries are only published for x86_64. Fail fast if someone tries to
+# build on another architecture (for example, Apple Silicon without --platform).
+RUN set -eux; \
+    arch="$(uname -m)"; \
+    if [ "$arch" != "x86_64" ]; then \
+      echo "Dell OMSA only ships x86_64 binaries, got ${arch}"; \
+      exit 1; \
+    fi
 
 # Install required tools
 RUN dnf -y install \
@@ -17,16 +26,14 @@ RUN dnf -y install \
 WORKDIR /opt/omsa
 RUN mkdir -p /opt/dell-exporter /etc/grafana-agent
 
-# Download OMSA 10.1
-RUN wget --header="User-Agent: Mozilla/5.0" \
-    https://dl.dell.com/FOLDER07414935M/1/OM-SrvAdmin-Dell-Web-LX-10.1.0.0-4561_A00.tar.gz && \
-    tar -xvzf OM-SrvAdmin-Dell-Web-LX-10.1.0.0-4561_A00.tar.gz
-
-# Install only RHEL8 RPMs one-by-one to avoid dependency hell
-RUN find ./linux -type f -name "*.rpm" | grep RHEL8 | while read rpm; do \
-    echo "Installing $rpm" && \
-    dnf -y install "$rpm" --skip-broken || echo "Failed to install $rpm"; \
-  done
+# Download OMSA 10.1 and install the RHEL8 x86_64 RPMs
+RUN set -eux; \
+    wget --header="User-Agent: Mozilla/5.0" -O omsa.tar.gz \
+      https://dl.dell.com/FOLDER07414935M/1/OM-SrvAdmin-Dell-Web-LX-10.1.0.0-4561_A00.tar.gz; \
+    tar -xzf omsa.tar.gz; \
+    dnf -y install $(find ./linux -type f -path "*/RHEL8/x86_64/*.rpm"); \
+    test -x /opt/dell/srvadmin/bin/omreport; \
+    rm -rf omsa.tar.gz linux
 
 # Set environment for OMSA tools
 ENV PATH="/opt/dell/srvadmin/bin:/opt/dell/srvadmin/sbin:${PATH}"

@@ -72,8 +72,8 @@ jobs:
 
     - name: Update agent.yaml with Grafana token
       run: |
-        # Replace the hardcoded token in agent.yaml with the fetched token
-        sed -i 's/password = ".*"/password = "${{ steps.fetch-token.outputs.grafana_token }}"/' docker/agent.yaml
+        # Replace the placeholder token in agent.yaml with the fetched token
+        sed -i 's/GRAFANA_API_KEY_PLACEHOLDER/${{ steps.fetch-token.outputs.grafana_token }}/' docker/agent.yaml
 
     - name: Log in to GitHub Container Registry
       uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef
@@ -85,7 +85,7 @@ jobs:
     - name: Build Docker image
       run: |
         cd docker
-        docker build -t ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}:latest .
+        docker build --platform=linux/amd64 -t ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}:latest .
 
     - name: Push Docker image
       run: |

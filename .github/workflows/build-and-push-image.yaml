@@ -46,7 +46,7 @@ jobs:
         VARSETS_RESPONSE=$(curl -s \
           --header "Authorization: Bearer ${{ env.TF_API_TOKEN }}" \
           --header "Content-Type: application/vnd.api+json" \
-          "https://app.terraform.io/api/v2/organizations/${{ env.TF_CLOUD_ORGANIZATION }}/varsets")
+          "https://app.terraform.io/api/v2/organizations/${{ env.TF_CLOUD_ORGANIZATION }}/varsets?page%5Bsize%5D=100")
         
         # Find the "K8S Cluster Variables" variable set
         VARSET_ID=$(echo "$VARSETS_RESPONSE" | jq -r '.data[] | select(.attributes.name == "K8S Cluster Variables") | .id')
@@ -64,7 +64,7 @@ jobs:
         VARIABLES_RESPONSE=$(curl -s \
           --header "Authorization: Bearer ${{ env.TF_API_TOKEN }}" \
           --header "Content-Type: application/vnd.api+json" \
-          "https://app.terraform.io/api/v2/varsets/$VARSET_ID/relationships/vars")
+          "https://app.terraform.io/api/v2/varsets/$VARSET_ID/relationships/vars?page%5Bsize%5D=100")
         
         # Find the variable id (value will be null if the variable is marked sensitive)
         VAR_ID=$(echo "$VARIABLES_RESPONSE" | jq -r '.data[] | select(.attributes.key == "grafana_service_account_token") | .id')

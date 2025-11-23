@@ -37,7 +37,7 @@ RUN set -eux; \
 
 # Set environment for OMSA tools
 ENV PATH="/opt/dell/srvadmin/bin:/opt/dell/srvadmin/sbin:${PATH}"
-ENV LD_LIBRARY_PATH=/opt/dell/srvadmin/lib64:$LD_LIBRARY_PATH
+ENV LD_LIBRARY_PATH=/opt/dell/srvadmin/lib64
 RUN echo "/opt/dell/srvadmin/lib64" > /etc/ld.so.conf.d/srvadmin.conf && ldconfig
 
 # Install Grafana Agent Flow from official repo
@@ -48,10 +48,17 @@ RUN wget -q -O /etc/pki/rpm-grafana.key https://rpm.grafana.com/gpg.key && \
     dnf -y install grafana-agent-flow
 
 # Install Fluent Bit (optional syslog -> GCP Cloud Logging forwarding)
-RUN curl -sSL -o /tmp/fluent-bit-release.rpm https://packages.fluentbit.io/fluent-bit-2.1/fluent-bit-release-2.1-1.el8.noarch.rpm && \
-    rpm -i /tmp/fluent-bit-release.rpm && \
-    dnf -y install fluent-bit && \
-    rm -f /tmp/fluent-bit-release.rpm
+RUN set -eux; \
+    curl -fsSL https://packages.fluentbit.io/fluentbit.key -o /etc/pki/rpm-gpg/RPM-GPG-KEY-FluentBit; \
+    printf '%s\n' \
+      '[fluent-bit]' \
+      'name=Fluent Bit' \
+      'baseurl=https://packages.fluentbit.io/centos/8' \
+      'enabled=1' \
+      'gpgcheck=1' \
+      'gpgkey=https://packages.fluentbit.io/fluentbit.key' \
+      > /etc/yum.repos.d/fluent-bit.repo; \
+    dnf -y install fluent-bit
 
 # Create dummy River config for build-time validation
 RUN echo 'server "default" { log_level = "info" } loki.write "default" { endpoint { url = "http://localhost:3100/loki/api/v1/push" } } loki.source.file "dummy" { targets = [] forward_to = [loki.write.default.receiver] }' > /etc/grafana-agent/dummy.river && \

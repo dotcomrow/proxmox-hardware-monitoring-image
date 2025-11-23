@@ -19,6 +19,7 @@ jobs:
     env:
       TF_CLOUD_ORGANIZATION: ${{ github.repository_owner }}
       TF_API_TOKEN: ${{ secrets.TFE_TOKEN }}
+      GRAFANA_SERVICE_ACCOUNT_TOKEN: ${{ secrets.GRAFANA_SERVICE_ACCOUNT_TOKEN }}
 
     permissions:
       contents: read
@@ -32,6 +33,14 @@ jobs:
     - name: Fetch Grafana Token from Terraform Cloud
       id: fetch-token
       run: |
+        set -euo pipefail
+        # If the token is provided directly as a GitHub secret, prefer that.
+        if [ -n "${GRAFANA_SERVICE_ACCOUNT_TOKEN:-}" ]; then
+          echo "::add-mask::$GRAFANA_SERVICE_ACCOUNT_TOKEN"
+          echo "grafana_token=$GRAFANA_SERVICE_ACCOUNT_TOKEN" >> $GITHUB_OUTPUT
+          exit 0
+        fi
+
         # Get all variable sets for the organization
         echo "Fetching variable sets for organization: ${{ env.TF_CLOUD_ORGANIZATION }}"
         VARSETS_RESPONSE=$(curl -s \
@@ -57,13 +66,25 @@ jobs:
           --header "Content-Type: application/vnd.api+json" \
           "https://app.terraform.io/api/v2/varsets/$VARSET_ID/relationships/vars")
         
-        # Find the grafana_service_account_token variable
-        GRAFANA_TOKEN=$(echo "$VARIABLES_RESPONSE" | jq -r '.data[] | select(.attributes.key == "grafana_service_account_token") | .attributes.value')
-        
-        if [ "$GRAFANA_TOKEN" == "null" ] || [ -z "$GRAFANA_TOKEN" ]; then
+        # Find the variable id (value will be null if the variable is marked sensitive)
+        VAR_ID=$(echo "$VARIABLES_RESPONSE" | jq -r '.data[] | select(.attributes.key == "grafana_service_account_token") | .id')
+        if [ "$VAR_ID" == "null" ] || [ -z "$VAR_ID" ]; then
           echo "Error: grafana_service_account_token not found in variable set"
           echo "Available variables in set:"
           echo "$VARIABLES_RESPONSE" | jq -r '.data[] | .attributes.key'
+          exit 1
+        fi
+
+        # Retrieve the variable details (non-sensitive values are returned; sensitive ones are not)
+        VAR_DETAILS=$(curl -s \
+          --header "Authorization: Bearer ${{ env.TF_API_TOKEN }}" \
+          --header "Content-Type: application/vnd.api+json" \
+          "https://app.terraform.io/api/v2/vars/$VAR_ID")
+
+        GRAFANA_TOKEN=$(echo "$VAR_DETAILS" | jq -r '.data.attributes.value')
+        if [ "$GRAFANA_TOKEN" == "null" ] || [ -z "$GRAFANA_TOKEN" ]; then
+          echo "Error: grafana_service_account_token is marked sensitive in Terraform Cloud, and sensitive values cannot be retrieved via the API."
+          echo "Provide the token via the GitHub secret GRAFANA_SERVICE_ACCOUNT_TOKEN or make the variable non-sensitive in Terraform Cloud."
           exit 1
         fi
         

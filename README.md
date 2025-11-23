@@ -25,7 +25,12 @@ The container will refuse to start if the Grafana API key placeholder is still p
 
 ## GitHub Actions Configuration
 
-The build workflow fetches the Grafana service account token from Terraform Cloud. You need to configure the following secrets in your GitHub repository:
+The build workflow fetches the Grafana service account token from Terraform Cloud **unless** it is supplied directly via GitHub secrets.
+
+- Preferred: set a GitHub secret `GRAFANA_SERVICE_ACCOUNT_TOKEN` with the Grafana API key.
+- If you rely on Terraform Cloud variable sets, the token **must not be marked sensitive** (Terraform Cloud will not return sensitive values over the API). The workflow will fail fast and tell you to use the GitHub secret if the variable is sensitive.
+
+You need to configure the following secrets in your GitHub repository:
 
 ### Required GitHub Secrets
 

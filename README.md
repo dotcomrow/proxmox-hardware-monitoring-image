@@ -23,6 +23,32 @@ docker run -d \
 
 The container will refuse to start if the Grafana API key placeholder is still present to avoid spamming 401s.
 
+### Optional: receive iDRAC syslog and forward to GCP Cloud Logging
+
+The image now ships with Fluent Bit to accept syslog from iDRAC (or anything else) and push it to GCP:
+
+- Exposes 5514/udp and 5514/tcp (defaults to UDP).
+- Enable by setting `ENABLE_SYSLOG_FORWARDING=true`.
+- Required env: `GCP_PROJECT_ID`, `GOOGLE_APPLICATION_CREDENTIALS` (path to mounted service account JSON).
+- Optional env: `SYSLOG_PORT` (default `5514`), `SYSLOG_MODE` (`udp` or `tcp`, default `udp`), `GCP_LOG_NAME` (default `idrac-syslog`), `GCP_RESOURCE` (default `global`).
+
+Example run:
+
+```bash
+docker run -d \
+  --name dell-hw-exporter \
+  -e GRAFANA_API_KEY=your_grafana_cloud_token \
+  -e ENABLE_SYSLOG_FORWARDING=true \
+  -e GCP_PROJECT_ID=my-gcp-project \
+  -e GOOGLE_APPLICATION_CREDENTIALS=/var/secrets/gcp-sa.json \
+  -v /path/to/gcp-sa.json:/var/secrets/gcp-sa.json:ro \
+  -p 12345:12345 \
+  -p 5514:5514/udp \
+  dell-hardware-exporter
+```
+
+Then point iDRAC remote syslog to `udp://<host-ip>:5514` (or TCP if you set `SYSLOG_MODE=tcp`). Logs will show up in Cloud Logging under `logName=projects/<project>/logs/idrac-syslog`.
+
 ## GitHub Actions Configuration
 
 The build workflow fetches the Grafana service account token from Terraform Cloud **unless** it is supplied directly via GitHub secrets.

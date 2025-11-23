@@ -47,6 +47,12 @@ RUN wget -q -O /etc/pki/rpm-grafana.key https://rpm.grafana.com/gpg.key && \
     dnf -y update && \
     dnf -y install grafana-agent-flow
 
+# Install Fluent Bit (optional syslog -> GCP Cloud Logging forwarding)
+RUN curl -sSL -o /tmp/fluent-bit-release.rpm https://packages.fluentbit.io/fluent-bit-2.1/fluent-bit-release-2.1-1.el8.noarch.rpm && \
+    rpm -i /tmp/fluent-bit-release.rpm && \
+    dnf -y install fluent-bit && \
+    rm -f /tmp/fluent-bit-release.rpm
+
 # Create dummy River config for build-time validation
 RUN echo 'server "default" { log_level = "info" } loki.write "default" { endpoint { url = "http://localhost:3100/loki/api/v1/push" } } loki.source.file "dummy" { targets = [] forward_to = [loki.write.default.receiver] }' > /etc/grafana-agent/dummy.river && \
     /usr/bin/grafana-agent run --config.file=/etc/grafana-agent/dummy.river --help || true
@@ -56,5 +62,7 @@ COPY collect.sh /opt/dell-exporter/collect.sh
 COPY agent.yaml /etc/grafana-agent/agent.river
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /opt/dell-exporter/collect.sh /entrypoint.sh
+
+EXPOSE 12345/tcp 5514/tcp 5514/udp
 
 ENTRYPOINT ["/entrypoint.sh"]

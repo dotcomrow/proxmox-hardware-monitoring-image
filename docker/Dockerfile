@@ -55,6 +55,7 @@ gpgkey=https://rpm.grafana.com/gpg.key
 sslverify=1
 sslcacert=/etc/pki/tls/certs/ca-bundle.crt
 EOF
+    ; \
     dnf -y update; \
     dnf -y install grafana-agent-flow
 

@@ -44,20 +44,18 @@ RUN echo "/opt/dell/srvadmin/lib64" > /etc/ld.so.conf.d/srvadmin.conf && ldconfi
 RUN set -eux; \
     wget -q -O /etc/pki/rpm-grafana.key https://rpm.grafana.com/gpg.key; \
     rpm --import /etc/pki/rpm-grafana.key; \
-    cat > /etc/yum.repos.d/grafana.repo <<'EOF'
-[grafana]
-name=grafana
-baseurl=https://rpm.grafana.com
-repo_gpgcheck=0
-enabled=1
-gpgcheck=1
-gpgkey=https://rpm.grafana.com/gpg.key
-sslverify=1
-sslcacert=/etc/pki/tls/certs/ca-bundle.crt
-EOF
-    ; \
-    dnf -y update; \
-    dnf -y install grafana-agent-flow
+    printf '%s\n' \
+      '[grafana]' \
+      'name=grafana' \
+      'baseurl=https://rpm.grafana.com' \
+      'repo_gpgcheck=0' \
+      'enabled=1' \
+      'gpgcheck=1' \
+      'gpgkey=https://rpm.grafana.com/gpg.key' \
+      'sslverify=1' \
+      'sslcacert=/etc/pki/tls/certs/ca-bundle.crt' \
+      > /etc/yum.repos.d/grafana.repo; \
+    dnf -y update && dnf -y install grafana-agent-flow
 
 # Install Fluent Bit (optional syslog -> GCP Cloud Logging forwarding)
 RUN set -eux; \

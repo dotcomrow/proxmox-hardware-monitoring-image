@@ -25,9 +25,27 @@ if [[ ! -x /opt/dell/srvadmin/bin/omreport ]]; then
   exit 1
 fi
 
+# Start OMSA services; srvadmin-services.sh covers all daemons, but keep direct starts as fallback
+if command -v srvadmin-services.sh >/dev/null 2>&1; then
+  srvadmin-services.sh start || true
+fi
 /opt/dell/srvadmin/sbin/dsm_sa_datamgrd &
 /opt/dell/srvadmin/sbin/dsm_sa_eventmgrd &
 /opt/dell/srvadmin/sbin/dsm_sa_snmpd &
+
+# Give OMSA a moment to come up; do not hard-fail, but log readiness issues
+OMSA_READY=false
+for i in $(seq 1 10); do
+  if /opt/dell/srvadmin/bin/omreport chassis >/dev/null 2>&1; then
+    OMSA_READY=true
+    break
+  fi
+  echo "Waiting for OMSA services to be ready (attempt $i/10)..." >&2
+  sleep 2
+done
+if [[ "$OMSA_READY" != "true" ]]; then
+  echo "OMSA not ready; collector may emit empty metrics until services come up." >&2
+fi
 
 # Start collector in background loop
 echo "Starting metrics collector loop..."

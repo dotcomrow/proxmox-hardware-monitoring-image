@@ -41,10 +41,21 @@ ENV LD_LIBRARY_PATH=/opt/dell/srvadmin/lib64
 RUN echo "/opt/dell/srvadmin/lib64" > /etc/ld.so.conf.d/srvadmin.conf && ldconfig
 
 # Install Grafana Agent Flow from official repo
-RUN wget -q -O /etc/pki/rpm-grafana.key https://rpm.grafana.com/gpg.key && \
-    rpm --import /etc/pki/rpm-grafana.key && \
-    echo -e '[grafana]\nname=grafana\nbaseurl=https://rpm.grafana.com\nrepo_gpgcheck=1\nenabled=1\ngpgcheck=1\ngpgkey=https://rpm.grafana.com/gpg.key\nsslverify=1\nsslcacert=/etc/pki/tls/certs/ca-bundle.crt' > /etc/yum.repos.d/grafana.repo && \
-    dnf -y update && \
+RUN set -eux; \
+    wget -q -O /etc/pki/rpm-grafana.key https://rpm.grafana.com/gpg.key; \
+    rpm --import /etc/pki/rpm-grafana.key; \
+    cat > /etc/yum.repos.d/grafana.repo <<'EOF'
+[grafana]
+name=grafana
+baseurl=https://rpm.grafana.com
+repo_gpgcheck=0
+enabled=1
+gpgcheck=1
+gpgkey=https://rpm.grafana.com/gpg.key
+sslverify=1
+sslcacert=/etc/pki/tls/certs/ca-bundle.crt
+EOF
+    dnf -y update; \
     dnf -y install grafana-agent-flow
 
 # Install Fluent Bit (optional syslog -> GCP Cloud Logging forwarding)

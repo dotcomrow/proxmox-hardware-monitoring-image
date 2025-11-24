@@ -25,10 +25,14 @@ if [[ ! -x /opt/dell/srvadmin/bin/omreport ]]; then
   exit 1
 fi
 
-# Start OMSA services; srvadmin-services.sh covers all daemons, but keep direct starts as fallback
-if command -v srvadmin-services.sh >/dev/null 2>&1; then
-  srvadmin-services.sh start || true
+# Require IPMI/SMBus devices from the host; bail with a clear message if missing.
+if [[ ! -e /dev/ipmi0 && ! -e /dev/ipmi/0 ]]; then
+  echo "ipmi devices not present in container; ensure host modules are loaded: modprobe dell_smbios i2c_i801 i2c_smbus ipmi_devintf ipmi_si" >&2
+  echo "also run container with --privileged -v /dev:/dev -v /sys:/sys (rw for /dev)" >&2
+  exit 1
 fi
+
+# Start OMSA daemons directly (avoid DKS driver builds inside the container)
 /opt/dell/srvadmin/sbin/dsm_sa_datamgrd &
 /opt/dell/srvadmin/sbin/dsm_sa_eventmgrd &
 /opt/dell/srvadmin/sbin/dsm_sa_snmpd &

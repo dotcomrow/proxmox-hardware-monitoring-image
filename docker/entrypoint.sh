@@ -77,7 +77,7 @@ fi
 
 # Run a few probes up front so the log contains useful diagnostics
 run_omreport_probe "chassis summary" chassis
-run_omreport_probe "chassis temps" chassis temps
+# run_omreport_probe "chassis temps" chassis temps
 run_omreport_probe "storage controller" storage controller
 
 # Start collector in background loop

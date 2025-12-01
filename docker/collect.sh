@@ -20,27 +20,29 @@ collect_and_format() {
   shift
   echo "Collecting: $section $*" >&2
 
-  local err_file
-  err_file="$(mktemp /tmp/omsa_collect.XXXXXX)"
+  local err_file out_file
+  err_file="$(mktemp /tmp/omsa_collect.err.XXXXXX)"
+  out_file="$(mktemp /tmp/omsa_collect.out.XXXXXX)"
 
-  local output
   set +e
-  output="$($OMREPORT "$section" "$@" 2>"$err_file")"
+  "$OMREPORT" "$section" "$@" >"$out_file" 2>"$err_file"
   local status=$?
   set -e
 
   if [[ $status -ne 0 ]]; then
     echo "⚠️ Failed to collect: $section $* (exit $status)" >&2
-    if [[ -s "$err_file" ]]; then
-      echo "---- omreport stderr/stdout ----" >&2
+    if [[ -s "$out_file" || -s "$err_file" ]]; then
+      echo "---- omreport stdout/stderr ----" >&2
+      tail -n 40 "$out_file" >&2 || true
       tail -n 40 "$err_file" >&2 || true
       echo "--------------------------------" >&2
     fi
-    rm -f "$err_file"
+    rm -f "$err_file" "$out_file"
     return
   fi
 
-  rm -f "$err_file"
+  local before after produced
+  before=$(wc -l <"$METRICS_FILE" || echo 0)
 
   awk -v prefix="${section// /_}" '
     BEGIN {
@@ -62,7 +64,13 @@ collect_and_format() {
         printf "%s{key=\"%s\"} %s\n", metric_name, key, value
       }
     }
-  ' <<< "$output" >> "$METRICS_FILE"
+  ' <"$out_file" >> "$METRICS_FILE"
+
+  after=$(wc -l <"$METRICS_FILE" || echo 0)
+  produced=$((after - before))
+  echo "Collected ${produced} metrics lines from: $section $*" >&2
+
+  rm -f "$err_file" "$out_file"
 }
 
 # Main collect calls

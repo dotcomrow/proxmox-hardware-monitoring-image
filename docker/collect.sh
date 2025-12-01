@@ -129,8 +129,10 @@ collect_smart_health() {
     err="$(mktemp /tmp/smart.err.XXXXXX)"
 
     # Use -iH for identity + overall health; timeout to avoid hangs
+    set +e
     timeout 10 "$SMARTCTL_BIN" -iH -d "megaraid,${idx}" "$SMART_BASE_DEVICE" >"$out" 2>"$err"
     status=$?
+    set -e
 
     if [[ $status -ne 0 ]]; then
       # Exit 2 usually means invalid device/index; stop scanning further

@@ -21,6 +21,9 @@ collect_and_format() {
   # Accept the full omreport command as arguments (e.g. chassis temps)
   local args=("$@")
   local label="${args[*]}"
+  local prefix="${label// /_}"
+  prefix="${prefix//[^A-Za-z0-9_]/_}"   # sanitize for Prom metric name
+  prefix="${prefix##_}"; prefix="${prefix%%_}"
   echo "Collecting: $label" >&2
 
   local err_file out_file
@@ -47,7 +50,7 @@ collect_and_format() {
   local before after produced
   before=$(wc -l <"$TMP_METRICS" || echo 0)
 
-  awk -v prefix="${label// /_}" '
+  awk -v prefix="${prefix}" '
     BEGIN {
       metric_name = "dell_" prefix
     }
@@ -78,10 +81,10 @@ collect_and_format() {
 
 # Main collect calls
 collect_and_format chassis
-collect_and_format chassis temps
-collect_and_format chassis fans
-collect_and_format chassis pwrsupplies
-collect_and_format chassis batteries
+# collect_and_format chassis temps
+# collect_and_format chassis fans
+# collect_and_format chassis pwrsupplies
+# collect_and_format chassis batteries
 collect_and_format chassis processors
 collect_and_format chassis memory
 collect_and_format chassis nics

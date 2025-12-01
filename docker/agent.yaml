@@ -1,17 +1,14 @@
-local.file_match "dell_metrics" {
-  path_targets = [{
-    path = "/opt/dell-exporter/metrics.prom",
-  }]
+prometheus.exporter.unix "dell_metrics" {
+  set_collectors = ["textfile"]
+  textfile {
+    directory = "/opt/dell-exporter"
+  }
 }
 
 prometheus.scrape "dell_exporter" {
   scrape_interval = "60s"
-  targets = [{
-    __address__ = "localhost",
-    __scheme__ = "http",
-    job = "dell_exporter",
-  }]
-
+  targets    = prometheus.exporter.unix.dell_metrics.targets
+  job_name   = "dell_exporter"
   forward_to = [prometheus.remote_write.grafana.receiver]
 }
 

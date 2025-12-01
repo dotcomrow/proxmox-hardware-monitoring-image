@@ -136,17 +136,18 @@ if [[ "$ENABLE_SYSLOG_FORWARDING" == "true" ]]; then
     Port   ${SYSLOG_PORT}
     Mode   ${SYSLOG_MODE}
     Parser syslog-rfc3164
+    Tag    syslog
 
 [FILTER]
     Name    modify
-    Match   syslog.*
+    Match   syslog*
     Add     log_source idrac
 
 [OUTPUT]
     Name        stackdriver
-    Match       syslog.*
+    Match       syslog*
     resource    ${GCP_RESOURCE}
-    log_name    ${GCP_LOG_NAME}
+    tag_prefix  ${GCP_LOG_NAME}
     project_id  ${GCP_PROJECT_ID}
     service_account_credentials ${GOOGLE_APPLICATION_CREDENTIALS}
 EOF

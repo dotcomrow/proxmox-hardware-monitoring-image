@@ -16,21 +16,22 @@ fi
 } > "$METRICS_FILE"
 
 collect_and_format() {
-  local section=$1
-  shift
-  echo "Collecting: $section $*" >&2
+  # Accept the full omreport command as arguments (e.g. chassis temps)
+  local args=("$@")
+  local label="${args[*]}"
+  echo "Collecting: $label" >&2
 
   local err_file out_file
   err_file="$(mktemp /tmp/omsa_collect.err.XXXXXX)"
   out_file="$(mktemp /tmp/omsa_collect.out.XXXXXX)"
 
   set +e
-  "$OMREPORT" "$section" "$@" >"$out_file" 2>"$err_file"
+  "$OMREPORT" "${args[@]}" >"$out_file" 2>"$err_file"
   local status=$?
   set -e
 
   if [[ $status -ne 0 ]]; then
-    echo "⚠️ Failed to collect: $section $* (exit $status)" >&2
+    echo "⚠️ Failed to collect: $label (exit $status)" >&2
     if [[ -s "$out_file" || -s "$err_file" ]]; then
       echo "---- omreport stdout/stderr ----" >&2
       tail -n 40 "$out_file" >&2 || true
@@ -44,7 +45,7 @@ collect_and_format() {
   local before after produced
   before=$(wc -l <"$METRICS_FILE" || echo 0)
 
-  awk -v prefix="${section// /_}" '
+  awk -v prefix="${label// /_}" '
     BEGIN {
       metric_name = "dell_" prefix
     }
@@ -68,22 +69,22 @@ collect_and_format() {
 
   after=$(wc -l <"$METRICS_FILE" || echo 0)
   produced=$((after - before))
-  echo "Collected ${produced} metrics lines from: $section $*" >&2
+  echo "Collected ${produced} metrics lines from: $label" >&2
 
   rm -f "$err_file" "$out_file"
 }
 
 # Main collect calls
 collect_and_format chassis
-collect_and_format "chassis temps"
-collect_and_format "chassis fans"
-collect_and_format "chassis pwrsupplies"
-collect_and_format "chassis batteries"
-collect_and_format "chassis processors"
-collect_and_format "chassis memory"
-collect_and_format "chassis nics"
-collect_and_format "system summary"
-collect_and_format "storage controller"
-collect_and_format "storage vdisk"
-collect_and_format "storage pdisk" controller=0
-collect_and_format "storage battery"
+collect_and_format chassis temps
+collect_and_format chassis fans
+collect_and_format chassis pwrsupplies
+collect_and_format chassis batteries
+collect_and_format chassis processors
+collect_and_format chassis memory
+collect_and_format chassis nics
+collect_and_format system summary
+collect_and_format storage controller
+collect_and_format storage vdisk
+collect_and_format storage pdisk controller=0
+collect_and_format storage battery

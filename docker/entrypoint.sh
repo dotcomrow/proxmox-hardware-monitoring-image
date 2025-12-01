@@ -128,6 +128,7 @@ if [[ "$ENABLE_SYSLOG_FORWARDING" == "true" ]]; then
     Flush        5
     Daemon       off
     Log_Level    info
+    Parsers_File /etc/fluent-bit/parsers.conf
 
 [INPUT]
     Name   syslog

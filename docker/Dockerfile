@@ -63,9 +63,10 @@ RUN set -eux; \
     printf '%s\n' \
       '[fluent-bit]' \
       'name=Fluent Bit' \
-      'baseurl=https://packages.fluentbit.io/centos/$releasever/$basearch' \
+      'baseurl=https://packages.fluentbit.io/rockylinux/$releasever/' \
       'enabled=1' \
       'gpgcheck=1' \
+      'repo_gpgcheck=1' \
       'gpgkey=https://packages.fluentbit.io/fluentbit.key' \
       > /etc/yum.repos.d/fluent-bit.repo; \
     dnf -y install fluent-bit; \

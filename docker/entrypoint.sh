@@ -149,7 +149,7 @@ if [[ "$ENABLE_SYSLOG_FORWARDING" == "true" ]]; then
     resource    ${GCP_RESOURCE}
     tag_prefix  ${GCP_LOG_NAME}
     export_to_project_id  ${GCP_PROJECT_ID}
-    service_account_credentials ${GOOGLE_APPLICATION_CREDENTIALS}
+    google_service_credentials ${GOOGLE_APPLICATION_CREDENTIALS}
 EOF
 
   echo "Starting Fluent Bit syslog receiver on ${SYSLOG_MODE} port ${SYSLOG_PORT} -> GCP project ${GCP_PROJECT_ID}"

@@ -2,6 +2,7 @@
 set -euo pipefail
 
 AGENT_CONFIG="/etc/grafana-agent/agent.river"
+OMREPORT="/opt/dell/srvadmin/bin/omreport"
 
 # Inject Grafana credentials if placeholders are present (or fail fast if missing)
 if grep -Eq "GRAFANA_API_KEY_PLACEHOLDER|REPLACE_ME|GRAFANA_USERNAME_PLACEHOLDER" "$AGENT_CONFIG"; then
@@ -20,7 +21,7 @@ if grep -Eq "GRAFANA_API_KEY_PLACEHOLDER|REPLACE_ME|GRAFANA_USERNAME_PLACEHOLDER
   exit 1
 fi
 
-if [[ ! -x /opt/dell/srvadmin/bin/omreport ]]; then
+if [[ ! -x "$OMREPORT" ]]; then
   echo "omreport missing; OMSA installation failed" >&2
   exit 1
 fi
@@ -31,6 +32,29 @@ if [[ ! -e /dev/ipmi0 && ! -e /dev/ipmi/0 ]]; then
   echo "also run container with --privileged -v /dev:/dev -v /sys:/sys (rw for /dev)" >&2
   exit 1
 fi
+
+run_omreport_probe() {
+  # Run omreport once and log success/failure with a small snippet
+  local label=$1
+  shift
+  local probe_log
+  probe_log="$(mktemp /tmp/omreport_probe.XXXXXX)"
+  set +e
+  "$OMREPORT" "$@" >"$probe_log" 2>&1
+  local status=$?
+  set -e
+
+  if [[ $status -eq 0 ]]; then
+    echo "OMSA probe ok: $label (omreport $*)" >&2
+    head -n 10 "$probe_log" >&2 || true
+  else
+    echo "OMSA probe FAILED ($status): $label (omreport $*)" >&2
+    echo "---- omreport stderr/stdout ----" >&2
+    tail -n 40 "$probe_log" >&2 || true
+    echo "--------------------------------" >&2
+  fi
+  rm -f "$probe_log"
+}
 
 # Start OMSA daemons directly (avoid DKS driver builds inside the container)
 /opt/dell/srvadmin/sbin/dsm_sa_datamgrd &
@@ -50,6 +74,11 @@ done
 if [[ "$OMSA_READY" != "true" ]]; then
   echo "OMSA not ready; collector may emit empty metrics until services come up." >&2
 fi
+
+# Run a few probes up front so the log contains useful diagnostics
+run_omreport_probe "chassis summary" chassis
+run_omreport_probe "chassis temps" chassis temps
+run_omreport_probe "storage controller" storage controller
 
 # Start collector in background loop
 echo "Starting metrics collector loop..."

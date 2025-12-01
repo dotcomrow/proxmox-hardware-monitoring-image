@@ -20,10 +20,27 @@ collect_and_format() {
   shift
   echo "Collecting: $section $*" >&2
 
-  if ! output="$($OMREPORT "$section" "$@" 2>/dev/null)"; then
-    echo "⚠️ Failed to collect: $section $*" >&2
+  local err_file
+  err_file="$(mktemp /tmp/omsa_collect.XXXXXX)"
+
+  local output
+  set +e
+  output="$($OMREPORT "$section" "$@" 2>"$err_file")"
+  local status=$?
+  set -e
+
+  if [[ $status -ne 0 ]]; then
+    echo "⚠️ Failed to collect: $section $* (exit $status)" >&2
+    if [[ -s "$err_file" ]]; then
+      echo "---- omreport stderr/stdout ----" >&2
+      tail -n 40 "$err_file" >&2 || true
+      echo "--------------------------------" >&2
+    fi
+    rm -f "$err_file"
     return
   fi
+
+  rm -f "$err_file"
 
   awk -v prefix="${section// /_}" '
     BEGIN {

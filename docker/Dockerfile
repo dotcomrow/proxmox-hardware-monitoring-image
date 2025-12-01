@@ -76,6 +76,11 @@ RUN set -eux; \
     /opt/fluent-bit/bin/fluent-bit --version
 ENV PATH="/opt/fluent-bit/bin:${PATH}"
 
+# SMART monitoring tools (best-effort SMART metrics)
+RUN set -eux; \
+    dnf -y install smartmontools; \
+    dnf clean all
+
 # Create dummy River config for build-time validation
 RUN echo 'server "default" { log_level = "info" } loki.write "default" { endpoint { url = "http://localhost:3100/loki/api/v1/push" } } loki.source.file "dummy" { targets = [] forward_to = [loki.write.default.receiver] }' > /etc/grafana-agent/dummy.river && \
     /usr/bin/grafana-agent run --config.file=/etc/grafana-agent/dummy.river --help || true

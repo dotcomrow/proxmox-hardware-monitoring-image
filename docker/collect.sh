@@ -5,6 +5,11 @@ METRICS_FILE="/opt/dell-exporter/metrics.prom"
 OMREPORT="/opt/dell/srvadmin/bin/omreport"
 TMP_METRICS="$(mktemp /opt/dell-exporter/metrics.prom.tmp.XXXXXX)"
 trap 'rm -f "$TMP_METRICS"' EXIT
+SMARTCTL_BIN="${SMARTCTL_BIN:-/usr/sbin/smartctl}"
+SMART_BASE_DEVICE="${SMART_BASE_DEVICE:-/dev/sda}"
+SMART_MAX_DRIVES="${SMART_MAX_DRIVES:-32}"
+SMART_ENABLE="${SMART_ENABLE:-true}"
+SMART_CONTROLLER_ID="${SMART_CONTROLLER_ID:-0}"
 
 if [[ ! -x "$OMREPORT" ]]; then
   echo "omreport not found!" >&2
@@ -16,6 +21,14 @@ fi
   echo "# HELP dell_system_metrics Dell hardware metrics collected via omreport"
   echo "# TYPE dell_system_metrics gauge"
 } > "$TMP_METRICS"
+
+sanitize_label() {
+  local val="$1"
+  # Replace unsafe chars with underscore
+  val="${val//[^A-Za-z0-9_]/_}"
+  val="${val##_}"; val="${val%%_}"
+  echo "$val"
+}
 
 collect_and_format() {
   # Accept the full omreport command as arguments (e.g. chassis temps)
@@ -93,6 +106,75 @@ collect_and_format storage controller
 collect_and_format storage vdisk
 collect_and_format storage pdisk controller=0
 collect_and_format storage battery
+
+# Optional: smartctl health checks (best-effort)
+collect_smart_health() {
+  if [[ "$SMART_ENABLE" != "true" ]]; then
+    echo "SMART collection disabled (SMART_ENABLE=${SMART_ENABLE})" >&2
+    return
+  fi
+  if [[ ! -x "$SMARTCTL_BIN" ]]; then
+    echo "smartctl not found; skipping SMART collection" >&2
+    return
+  fi
+
+  echo "# HELP dell_smart_drive_health SMART overall health (1=PASSED,0=FAILED,-1=UNKNOWN)" >>"$TMP_METRICS"
+  echo "# TYPE dell_smart_drive_health gauge" >>"$TMP_METRICS"
+  echo "# HELP dell_smart_drive_info SMART drive identity (labels only)" >>"$TMP_METRICS"
+  echo "# TYPE dell_smart_drive_info gauge" >>"$TMP_METRICS"
+
+  for idx in $(seq 0 $((SMART_MAX_DRIVES - 1))); do
+    local out err status
+    out="$(mktemp /tmp/smart.out.XXXXXX)"
+    err="$(mktemp /tmp/smart.err.XXXXXX)"
+
+    # Use -iH for identity + overall health; timeout to avoid hangs
+    timeout 10 "$SMARTCTL_BIN" -iH -d "megaraid,${idx}" "$SMART_BASE_DEVICE" >"$out" 2>"$err"
+    status=$?
+
+    if [[ $status -ne 0 ]]; then
+      # Exit 2 usually means invalid device/index; stop scanning further
+      if grep -qiE "Invalid .*megaraid|Unable to detect device|Open device failed" "$err" 2>/dev/null; then
+        rm -f "$out" "$err"
+        break
+      fi
+      echo "SMART probe failed for slot ${idx} (exit ${status})" >&2
+      tail -n 10 "$err" >&2 || true
+      rm -f "$out" "$err"
+      continue
+    fi
+
+    # Extract fields
+    local model serial fw health
+    model="$(grep -E '^(Device Model|Product|Model Family)[[:space:]]*:' "$out" | head -n1 | cut -d: -f2- | xargs || true)"
+    serial="$(grep -E '^Serial Number[[:space:]]*:' "$out" | head -n1 | cut -d: -f2- | xargs || true)"
+    fw="$(grep -E '^(Firmware Version|Revision Number)[[:space:]]*:' "$out" | head -n1 | cut -d: -f2- | xargs || true)"
+    health="$(grep -i 'overall-health self-assessment test result' "$out" | head -n1 | awk -F: '{gsub(/^[ \t]+/,"",$2); print $2}' || true)"
+
+    local health_val=-1
+    if echo "$health" | grep -qi "PASSED"; then
+      health_val=1
+    elif echo "$health" | grep -qi "FAILED"; then
+      health_val=0
+    fi
+
+    local model_s serial_s fw_s
+    model_s="$(sanitize_label "${model:-unknown}")"
+    serial_s="$(sanitize_label "${serial:-unknown}")"
+    fw_s="$(sanitize_label "${fw:-unknown}")"
+
+    echo "smartctl slot ${idx}: model='${model}' serial='${serial}' fw='${fw}' health='${health}' (${health_val})" >&2
+
+    cat >>"$TMP_METRICS" <<EOF
+dell_smart_drive_info{controller="${SMART_CONTROLLER_ID}",slot="${idx}",device="$(sanitize_label "${SMART_BASE_DEVICE}")",model="${model_s}",serial="${serial_s}",firmware="${fw_s}"} 1
+dell_smart_drive_health{controller="${SMART_CONTROLLER_ID}",slot="${idx}",device="$(sanitize_label "${SMART_BASE_DEVICE}")"} ${health_val}
+EOF
+
+    rm -f "$out" "$err"
+  done
+}
+
+collect_smart_health
 
 # Atomically replace the metrics file to avoid textfile parser seeing partial writes
 mv "$TMP_METRICS" "$METRICS_FILE"

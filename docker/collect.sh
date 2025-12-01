@@ -3,17 +3,19 @@ set -euo pipefail
 
 METRICS_FILE="/opt/dell-exporter/metrics.prom"
 OMREPORT="/opt/dell/srvadmin/bin/omreport"
+TMP_METRICS="$(mktemp /opt/dell-exporter/metrics.prom.tmp.XXXXXX)"
+trap 'rm -f "$TMP_METRICS"' EXIT
 
 if [[ ! -x "$OMREPORT" ]]; then
   echo "omreport not found!" >&2
   exit 1
 fi
 
-# Clear previous metrics
+# Start fresh metrics into a temp file (atomic move at the end avoids partial reads)
 {
   echo "# HELP dell_system_metrics Dell hardware metrics collected via omreport"
   echo "# TYPE dell_system_metrics gauge"
-} > "$METRICS_FILE"
+} > "$TMP_METRICS"
 
 collect_and_format() {
   # Accept the full omreport command as arguments (e.g. chassis temps)
@@ -43,7 +45,7 @@ collect_and_format() {
   fi
 
   local before after produced
-  before=$(wc -l <"$METRICS_FILE" || echo 0)
+  before=$(wc -l <"$TMP_METRICS" || echo 0)
 
   awk -v prefix="${label// /_}" '
     BEGIN {
@@ -65,9 +67,9 @@ collect_and_format() {
         printf "%s{key=\"%s\"} %s\n", metric_name, key, value
       }
     }
-  ' <"$out_file" >> "$METRICS_FILE"
+  ' <"$out_file" >> "$TMP_METRICS"
 
-  after=$(wc -l <"$METRICS_FILE" || echo 0)
+  after=$(wc -l <"$TMP_METRICS" || echo 0)
   produced=$((after - before))
   echo "Collected ${produced} metrics lines from: $label" >&2
 
@@ -88,3 +90,6 @@ collect_and_format storage controller
 collect_and_format storage vdisk
 collect_and_format storage pdisk controller=0
 collect_and_format storage battery
+
+# Atomically replace the metrics file to avoid textfile parser seeing partial writes
+mv "$TMP_METRICS" "$METRICS_FILE"

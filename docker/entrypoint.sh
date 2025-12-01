@@ -97,6 +97,18 @@ GCP_LOG_NAME="${GCP_LOG_NAME:-idrac-syslog}"
 GCP_RESOURCE="${GCP_RESOURCE:-global}"
 
 if [[ "$ENABLE_SYSLOG_FORWARDING" == "true" ]]; then
+  # Resolve Fluent Bit binary in multiple expected locations
+  FLUENT_BIT_BIN="${FLUENT_BIT_BIN:-}"
+  if [[ -z "$FLUENT_BIT_BIN" ]]; then
+    FLUENT_BIT_BIN="$(command -v fluent-bit || true)"
+  fi
+  if [[ -z "$FLUENT_BIT_BIN" && -x /opt/fluent-bit/bin/fluent-bit ]]; then
+    FLUENT_BIT_BIN="/opt/fluent-bit/bin/fluent-bit"
+  fi
+  if [[ -z "$FLUENT_BIT_BIN" && -x /fluent-bit/bin/fluent-bit ]]; then
+    FLUENT_BIT_BIN="/fluent-bit/bin/fluent-bit"
+  fi
+
   if [[ -z "${GCP_PROJECT_ID:-}" ]]; then
     echo "ENABLE_SYSLOG_FORWARDING=true but GCP_PROJECT_ID is not set" >&2
     exit 1
@@ -105,8 +117,9 @@ if [[ "$ENABLE_SYSLOG_FORWARDING" == "true" ]]; then
     echo "GOOGLE_APPLICATION_CREDENTIALS must point to a readable service account JSON key" >&2
     exit 1
   fi
-  if ! command -v fluent-bit >/dev/null 2>&1; then
-    echo "Fluent Bit is not installed; cannot forward syslog" >&2
+  if [[ -z "$FLUENT_BIT_BIN" ]]; then
+    echo "Fluent Bit not found in image (PATH=$PATH or /fluent-bit/bin). Disabling syslog forwarding to keep service running; logs will NOT be forwarded." >&2
+    ls -l /opt/fluent-bit/bin /fluent-bit/bin 2>/dev/null || true
     exit 1
   fi
 
@@ -138,7 +151,7 @@ if [[ "$ENABLE_SYSLOG_FORWARDING" == "true" ]]; then
 EOF
 
   echo "Starting Fluent Bit syslog receiver on ${SYSLOG_MODE} port ${SYSLOG_PORT} -> GCP project ${GCP_PROJECT_ID}"
-  fluent-bit -c /etc/fluent-bit/fluent-bit.conf &
+  "$FLUENT_BIT_BIN" -c /etc/fluent-bit/fluent-bit.conf &
 fi
 
 # Run Grafana Agent

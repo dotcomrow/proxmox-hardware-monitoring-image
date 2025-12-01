@@ -70,6 +70,8 @@ RUN set -eux; \
       'gpgkey=https://packages.fluentbit.io/fluentbit.key' \
       > /etc/yum.repos.d/fluent-bit.repo; \
     dnf -y install fluent-bit; \
+    mkdir -p /fluent-bit/bin; \
+    ln -sf /opt/fluent-bit/bin/fluent-bit /fluent-bit/bin/fluent-bit; \
     ln -sf /opt/fluent-bit/bin/fluent-bit /usr/local/bin/fluent-bit; \
     /opt/fluent-bit/bin/fluent-bit --version
 ENV PATH="/opt/fluent-bit/bin:${PATH}"

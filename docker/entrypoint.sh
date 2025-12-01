@@ -148,7 +148,7 @@ if [[ "$ENABLE_SYSLOG_FORWARDING" == "true" ]]; then
     Match       syslog*
     resource    ${GCP_RESOURCE}
     tag_prefix  ${GCP_LOG_NAME}
-    project_id  ${GCP_PROJECT_ID}
+    export_to_project_id  ${GCP_PROJECT_ID}
     service_account_credentials ${GOOGLE_APPLICATION_CREDENTIALS}
 EOF
 

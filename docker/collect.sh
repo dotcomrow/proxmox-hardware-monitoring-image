@@ -17,10 +17,7 @@ if [[ ! -x "$OMREPORT" ]]; then
 fi
 
 # Start fresh metrics into a temp file (atomic move at the end avoids partial reads)
-{
-  echo "# HELP dell_system_metrics Dell hardware metrics collected via omreport"
-  echo "# TYPE dell_system_metrics gauge"
-} > "$TMP_METRICS"
+true > "$TMP_METRICS"
 
 sanitize_label() {
   local val="$1"
@@ -30,6 +27,13 @@ sanitize_label() {
   echo "$val"
 }
 
+emit_metric() {
+  local name="$1"
+  local labels="$2"
+  local value="$3"
+  printf '%s{%s} %s\n' "$name" "$labels" "$value" >> "$TMP_METRICS"
+}
+
 collect_and_format() {
   # Accept the full omreport command as arguments (e.g. chassis temps)
   local args=("$@")
@@ -37,6 +41,7 @@ collect_and_format() {
   local prefix="${label// /_}"
   prefix="${prefix//[^A-Za-z0-9_]/_}"   # sanitize for Prom metric name
   prefix="${prefix##_}"; prefix="${prefix%%_}"
+  prefix="$(echo "$prefix" | tr '[:upper:]' '[:lower:]')"
   echo "Collecting: $label" >&2
 
   local err_file out_file
@@ -64,10 +69,6 @@ collect_and_format() {
   before=$(wc -l <"$TMP_METRICS" || echo 0)
 
   awk -v prefix="${prefix}" '
-    BEGIN {
-      metric_name = "dell_" prefix
-    }
-
     /^[A-Za-z]/ {
       gsub(/\r/, "")
       split($0, kv, ":")
@@ -77,10 +78,15 @@ collect_and_format() {
       # Cleanup key and value
       gsub(/^[ \t]+|[ \t]+$/, "", key)
       gsub(/[^a-zA-Z0-9_]/, "_", key)
+      gsub(/^_+|_+$/, "", key)
+      key = tolower(key)
       gsub(/^[ \t]+|[ \t]+$/, "", value)
 
-      if (value ~ /^-?[0-9]+(\.[0-9]+)?$/) {
-        printf "%s{key=\"%s\"} %s\n", metric_name, key, value
+      if (value ~ /^-?[0-9]+(\.[0-9]+)?$/ && key != "") {
+        metric_name = "dell_" prefix "_" key
+        gsub(/__+/, "_", metric_name)
+        gsub(/^_+|_+$/, "", metric_name)
+        printf "%s %s\n", metric_name, value
       }
     }
   ' <"$out_file" >> "$TMP_METRICS"
@@ -94,10 +100,6 @@ collect_and_format() {
 
 # Main collect calls
 collect_and_format chassis
-# collect_and_format chassis temps
-# collect_and_format chassis fans
-# collect_and_format chassis pwrsupplies
-# collect_and_format chassis batteries
 collect_and_format chassis processors
 collect_and_format chassis memory
 collect_and_format chassis nics
@@ -117,11 +119,6 @@ collect_smart_health() {
     echo "smartctl not found; skipping SMART collection" >&2
     return
   fi
-
-  echo "# HELP dell_smart_drive_health SMART overall health (1=PASSED,0=FAILED,-1=UNKNOWN)" >>"$TMP_METRICS"
-  echo "# TYPE dell_smart_drive_health gauge" >>"$TMP_METRICS"
-  echo "# HELP dell_smart_drive_info SMART drive identity (labels only)" >>"$TMP_METRICS"
-  echo "# TYPE dell_smart_drive_info gauge" >>"$TMP_METRICS"
 
   for idx in $(seq 0 $((SMART_MAX_DRIVES - 1))); do
     local out err status
@@ -167,10 +164,38 @@ collect_smart_health() {
 
     echo "smartctl slot ${idx}: model='${model}' serial='${serial}' fw='${fw}' health='${health}' (${health_val})" >&2
 
-    cat >>"$TMP_METRICS" <<EOF
-dell_smart_drive_info{controller="${SMART_CONTROLLER_ID}",slot="${idx}",device="$(sanitize_label "${SMART_BASE_DEVICE}")",model="${model_s}",serial="${serial_s}",firmware="${fw_s}"} 1
-dell_smart_drive_health{controller="${SMART_CONTROLLER_ID}",slot="${idx}",device="$(sanitize_label "${SMART_BASE_DEVICE}")"} ${health_val}
-EOF
+    emit_metric "dell_smart_drive_info" "controller=\"${SMART_CONTROLLER_ID}\",slot=\"${idx}\",device=\"$(sanitize_label "${SMART_BASE_DEVICE}")\",model=\"${model_s}\",serial=\"${serial_s}\",firmware=\"${fw_s}\"" 1
+    emit_metric "dell_smart_drive_health" "controller=\"${SMART_CONTROLLER_ID}\",slot=\"${idx}\",device=\"$(sanitize_label "${SMART_BASE_DEVICE}")\"" "${health_val}"
+
+    # Per-attribute metrics from SMART attribute table (SATA) and selected SAS counters
+    awk -v ctrl="${SMART_CONTROLLER_ID}" -v slot="${idx}" -v dev="$(sanitize_label "${SMART_BASE_DEVICE}")" '
+      function sanitize(s) { gsub(/[^A-Za-z0-9_]/,"_",s); s=tolower(s); gsub(/^_+|_+$/,"",s); return s }
+      # SATA attribute table
+      $1 ~ /^[0-9]+$/ && $2 ~ /[A-Za-z0-9_-]/ && $(NF) ~ /[0-9]/ {
+        id = $1
+        attr = sanitize($2)
+        raw = $(NF)
+        sub(/\(.*/, "", raw)
+        gsub(/[^0-9.\-]/, "", raw)
+        if (raw == "" || attr == "") next
+        printf "dell_smart_attr_raw{controller=\"%s\",slot=\"%s\",device=\"%s\",id=\"%s\",attribute=\"%s\"} %s\n", ctrl, slot, dev, id, attr, raw
+      }
+      # SAS-style counters
+      /(Non-medium error count|grown defect list|Elements in grown defect list)/ {
+        val=$NF; gsub(/[^0-9.\-]/,"",val); if(val=="") next;
+        key=sanitize($0); printf "dell_smart_attr_raw{controller=\"%s\",slot=\"%s\",device=\"%s\",id=\"sas\",attribute=\"%s\"} %s\n", ctrl, slot, dev, key, val
+      }
+    ' "$out" >>"$TMP_METRICS"
+
+    # Temperature if present
+    temp_c=$(awk '
+      /Current Drive Temperature:/ {for(i=1;i<=NF;i++) if($i ~ /^[0-9]+$/ && $(i+1) ~ /^C/) {print $i; exit}}
+      /Drive Temperature:/ {for(i=1;i<=NF;i++) if($i ~ /^[0-9]+$/ && $(i+1) ~ /^C/) {print $i; exit}}
+      /Temperature_Celsius/ && $1 ~ /^[0-9]+$/ {print $NF; exit}
+    ' "$out")
+    if [[ -n "$temp_c" ]]; then
+      emit_metric "dell_smart_temp_c" "controller=\"${SMART_CONTROLLER_ID}\",slot=\"${idx}\",device=\"$(sanitize_label "${SMART_BASE_DEVICE}")\"" "$temp_c"
+    fi
 
     rm -f "$out" "$err"
   done

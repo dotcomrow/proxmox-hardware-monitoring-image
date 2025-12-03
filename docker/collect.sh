@@ -194,15 +194,16 @@ collect_smart_health() {
         updated = $(8)
         when_failed = $(9)
         raw = ""
-        for (i=NF; i>=1; i--) {
+        for (i=10; i<=NF; i++) {
           token=$i
-          if (token !~ /[0-9]/) continue
-          if (token ~ /[0-9]-[0-9]/) { split(token,parts,"-"); token=parts[1] }
-          if (token ~ /\//) { split(token,parts,"/"); token=parts[1] }
-          gsub(/[^0-9.\-]/, "", token)
-          if (token == "") continue
-          raw=token
-          break
+          if (token ~ /[0-9]/) {
+            if (token ~ /[0-9]-[0-9]/) { split(token,parts,"-"); token=parts[1] }
+            if (token ~ /\//) { split(token,parts,"/"); token=parts[1] }
+            gsub(/[^0-9.\-]/, "", token)
+            if (token == "") continue
+            raw=token
+            break
+          }
         }
         if (attr == "") next
         if (value ~ /^[0-9]+$/) printf "dell_smart_attr_value{controller=\"%s\",slot=\"%s\",device=\"%s\",id=\"%s\",attribute=\"%s\"} %s\n", ctrl, slot, dev, id, attr, value

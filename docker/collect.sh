@@ -10,6 +10,8 @@ SMART_BASE_DEVICE="${SMART_BASE_DEVICE:-/dev/sda}"
 SMART_MAX_DRIVES="${SMART_MAX_DRIVES:-6}"
 SMART_ENABLE="${SMART_ENABLE:-true}"
 SMART_CONTROLLER_ID="${SMART_CONTROLLER_ID:-0}"
+SMART_DRIVER="${SMART_DRIVER:-sat+megaraid}"
+SMART_DRIVER_FALLBACKS="${SMART_DRIVER_FALLBACKS:-megaraid}"
 
 if [[ ! -x "$OMREPORT" ]]; then
   echo "omreport not found!" >&2
@@ -125,14 +127,24 @@ collect_smart_health() {
     out="$(mktemp /tmp/smart.out.XXXXXX)"
     err="$(mktemp /tmp/smart.err.XXXXXX)"
 
-    # Use full -a to gather attributes; timeout to avoid hangs
-    set +e
-    timeout 15 "$SMARTCTL_BIN" -a -d "megaraid,${idx}" "$SMART_BASE_DEVICE" >"$out" 2>"$err"
-    status=$?
-    set -e
+    # Try primary driver plus fallbacks for this slot
+    local success=0
+    IFS=',' read -r -a drv_list <<<"${SMART_DRIVER},${SMART_DRIVER_FALLBACKS}"
+    for drv in "${drv_list[@]}"; do
+      drv="$(echo "$drv" | xargs)"  # trim
+      [[ -z "$drv" ]] && continue
+      set +e
+      timeout 15 "$SMARTCTL_BIN" -a -d "${drv},${idx}" "$SMART_BASE_DEVICE" >"$out" 2>"$err"
+      status=$?
+      set -e
+      if [[ $status -eq 0 ]]; then
+        success=1
+        break
+      fi
+    done
 
-    if [[ $status -ne 0 ]]; then
-      echo "SMART probe failed for slot ${idx} (exit ${status})" >&2
+    if [[ $success -ne 1 ]]; then
+      echo "SMART probe failed for slot ${idx} (drivers tried: ${SMART_DRIVER},${SMART_DRIVER_FALLBACKS}) last exit ${status}" >&2
       tail -n 10 "$err" >&2 || true
       rm -f "$out" "$err"
       continue

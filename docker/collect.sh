@@ -195,7 +195,13 @@ collect_smart_health() {
         when_failed = $(9)
         raw = ""
         for (i=NF; i>=1; i--) {
-          if ($i ~ /^-?[0-9]+(\.[0-9]+)?$/) { raw=$i; break }
+          token=$i
+          if (token !~ /[0-9]/) continue
+          if (token ~ /\//) { split(token,parts,"/"); token=parts[1] }
+          gsub(/[^0-9.\-]/, "", token)
+          if (token == "") continue
+          raw=token
+          break
         }
         if (attr == "") next
         if (value ~ /^[0-9]+$/) printf "dell_smart_attr_value{controller=\"%s\",slot=\"%s\",device=\"%s\",id=\"%s\",attribute=\"%s\"} %s\n", ctrl, slot, dev, id, attr, value

@@ -7,7 +7,7 @@ TMP_METRICS="$(mktemp /opt/dell-exporter/metrics.prom.tmp.XXXXXX)"
 trap 'rm -f "$TMP_METRICS"' EXIT
 SMARTCTL_BIN="${SMARTCTL_BIN:-/usr/sbin/smartctl}"
 SMART_BASE_DEVICE="${SMART_BASE_DEVICE:-/dev/sda}"
-SMART_MAX_DRIVES="${SMART_MAX_DRIVES:-32}"
+SMART_MAX_DRIVES="${SMART_MAX_DRIVES:-6}"
 SMART_ENABLE="${SMART_ENABLE:-true}"
 SMART_CONTROLLER_ID="${SMART_CONTROLLER_ID:-0}"
 
@@ -120,7 +120,6 @@ collect_smart_health() {
     return
   fi
 
-  local consecutive_failures=0
   for idx in $(seq 0 $((SMART_MAX_DRIVES - 1))); do
     local out err status
     out="$(mktemp /tmp/smart.out.XXXXXX)"
@@ -133,18 +132,11 @@ collect_smart_health() {
     set -e
 
     if [[ $status -ne 0 ]]; then
-      consecutive_failures=$((consecutive_failures + 1))
-      # Exit 2/4 usually means invalid device/index; break after a few misses
-      if grep -qiE "Invalid .*megaraid|Unable to detect device|Open device failed|No such device" "$err" 2>/dev/null || [[ $consecutive_failures -ge 3 ]]; then
-        rm -f "$out" "$err"
-        break
-      fi
       echo "SMART probe failed for slot ${idx} (exit ${status})" >&2
       tail -n 10 "$err" >&2 || true
       rm -f "$out" "$err"
       continue
     fi
-    consecutive_failures=0
 
     # Extract fields
     local model serial fw health

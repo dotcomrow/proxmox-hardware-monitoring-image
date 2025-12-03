@@ -182,15 +182,25 @@ collect_smart_health() {
     # Per-attribute metrics from SMART attribute table (SATA) and selected SAS counters
     awk -v ctrl="${SMART_CONTROLLER_ID}" -v slot="${idx}" -v dev="$(sanitize_label "${SMART_BASE_DEVICE}")" '
       function sanitize(s) { gsub(/[^A-Za-z0-9_]/,"_",s); s=tolower(s); gsub(/^_+|_+$/,"",s); return s }
-      # SATA attribute table
+      # SATA attribute table: ID ATTR FLAG VALUE WORST THRESH TYPE UPDATED WHEN_FAILED RAW
       $1 ~ /^[0-9]+$/ && $2 ~ /[A-Za-z0-9_-]/ && $(NF) ~ /[0-9]/ {
         id = $1
         attr = sanitize($2)
+        flag = $(3)
+        value = $(4)
+        worst = $(5)
+        thresh = $(6)
+        type_f = $(7)
+        updated = $(8)
+        when_failed = $(9)
         raw = $(NF)
         sub(/\(.*/, "", raw)
         gsub(/[^0-9.\-]/, "", raw)
-        if (raw == "" || attr == "") next
-        printf "dell_smart_attr_raw{controller=\"%s\",slot=\"%s\",device=\"%s\",id=\"%s\",attribute=\"%s\"} %s\n", ctrl, slot, dev, id, attr, raw
+        if (attr == "") next
+        if (value ~ /^[0-9]+$/) printf "dell_smart_attr_value{controller=\"%s\",slot=\"%s\",device=\"%s\",id=\"%s\",attribute=\"%s\"} %s\n", ctrl, slot, dev, id, attr, value
+        if (worst ~ /^[0-9]+$/) printf "dell_smart_attr_worst{controller=\"%s\",slot=\"%s\",device=\"%s\",id=\"%s\",attribute=\"%s\"} %s\n", ctrl, slot, dev, id, attr, worst
+        if (thresh ~ /^[0-9]+$/) printf "dell_smart_attr_thresh{controller=\"%s\",slot=\"%s\",device=\"%s\",id=\"%s\",attribute=\"%s\"} %s\n", ctrl, slot, dev, id, attr, thresh
+        if (raw != "") printf "dell_smart_attr_raw{controller=\"%s\",slot=\"%s\",device=\"%s\",id=\"%s\",attribute=\"%s\"} %s\n", ctrl, slot, dev, id, attr, raw
       }
       # SAS-style counters
       /(Non-medium error count|grown defect list|Elements in grown defect list)/ {

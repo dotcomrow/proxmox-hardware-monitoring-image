@@ -197,6 +197,7 @@ collect_smart_health() {
         for (i=NF; i>=1; i--) {
           token=$i
           if (token !~ /[0-9]/) continue
+          if (token ~ /[0-9]-[0-9]/) { split(token,parts,"-"); token=parts[1] }
           if (token ~ /\//) { split(token,parts,"/"); token=parts[1] }
           gsub(/[^0-9.\-]/, "", token)
           if (token == "") continue

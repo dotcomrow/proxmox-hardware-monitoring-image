@@ -137,7 +137,11 @@ collect_smart_health() {
       timeout 15 "$SMARTCTL_BIN" -a -d "${drv},${idx}" "$SMART_BASE_DEVICE" >"$out" 2>"$err"
       status=$?
       set -e
-      if [[ $status -eq 0 ]]; then
+      # Treat output as usable even if status is non-zero, unless device open failed
+      if grep -qiE "Open device failed|Unable to detect device|No such device" "$err" 2>/dev/null; then
+        continue
+      fi
+      if [[ -s "$out" ]]; then
         success=1
         break
       fi
@@ -149,6 +153,7 @@ collect_smart_health() {
       rm -f "$out" "$err"
       continue
     fi
+    echo "SMART probe slot ${idx} succeeded with driver ${drv} (exit ${status})" >&2
 
     # Extract fields
     local model serial fw health

@@ -183,7 +183,7 @@ collect_smart_health() {
     awk -v ctrl="${SMART_CONTROLLER_ID}" -v slot="${idx}" -v dev="$(sanitize_label "${SMART_BASE_DEVICE}")" '
       function sanitize(s) { gsub(/[^A-Za-z0-9_]/,"_",s); s=tolower(s); gsub(/^_+|_+$/,"",s); return s }
       # SATA attribute table: ID ATTR FLAG VALUE WORST THRESH TYPE UPDATED WHEN_FAILED RAW
-      $1 ~ /^[0-9]+$/ && $2 ~ /[A-Za-z0-9_-]/ && $(NF) ~ /[0-9]/ {
+      $1 ~ /^[0-9]+$/ && $2 ~ /[A-Za-z0-9_-]/ {
         id = $1
         attr = sanitize($2)
         flag = $(3)
@@ -193,9 +193,10 @@ collect_smart_health() {
         type_f = $(7)
         updated = $(8)
         when_failed = $(9)
-        raw = $(NF)
-        sub(/\(.*/, "", raw)
-        gsub(/[^0-9.\-]/, "", raw)
+        raw = ""
+        for (i=NF; i>=1; i--) {
+          if ($i ~ /^-?[0-9]+(\.[0-9]+)?$/) { raw=$i; break }
+        }
         if (attr == "") next
         if (value ~ /^[0-9]+$/) printf "dell_smart_attr_value{controller=\"%s\",slot=\"%s\",device=\"%s\",id=\"%s\",attribute=\"%s\"} %s\n", ctrl, slot, dev, id, attr, value
         if (worst ~ /^[0-9]+$/) printf "dell_smart_attr_worst{controller=\"%s\",slot=\"%s\",device=\"%s\",id=\"%s\",attribute=\"%s\"} %s\n", ctrl, slot, dev, id, attr, worst

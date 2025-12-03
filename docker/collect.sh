@@ -120,20 +120,22 @@ collect_smart_health() {
     return
   fi
 
+  local consecutive_failures=0
   for idx in $(seq 0 $((SMART_MAX_DRIVES - 1))); do
     local out err status
     out="$(mktemp /tmp/smart.out.XXXXXX)"
     err="$(mktemp /tmp/smart.err.XXXXXX)"
 
-    # Use -iH for identity + overall health; timeout to avoid hangs
+    # Use full -a to gather attributes; timeout to avoid hangs
     set +e
-    timeout 10 "$SMARTCTL_BIN" -iH -d "megaraid,${idx}" "$SMART_BASE_DEVICE" >"$out" 2>"$err"
+    timeout 15 "$SMARTCTL_BIN" -a -d "megaraid,${idx}" "$SMART_BASE_DEVICE" >"$out" 2>"$err"
     status=$?
     set -e
 
     if [[ $status -ne 0 ]]; then
-      # Exit 2 usually means invalid device/index; stop scanning further
-      if grep -qiE "Invalid .*megaraid|Unable to detect device|Open device failed" "$err" 2>/dev/null; then
+      consecutive_failures=$((consecutive_failures + 1))
+      # Exit 2/4 usually means invalid device/index; break after a few misses
+      if grep -qiE "Invalid .*megaraid|Unable to detect device|Open device failed|No such device" "$err" 2>/dev/null || [[ $consecutive_failures -ge 3 ]]; then
         rm -f "$out" "$err"
         break
       fi
@@ -142,6 +144,7 @@ collect_smart_health() {
       rm -f "$out" "$err"
       continue
     fi
+    consecutive_failures=0
 
     # Extract fields
     local model serial fw health

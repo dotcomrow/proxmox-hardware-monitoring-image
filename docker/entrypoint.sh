@@ -32,6 +32,9 @@ if [[ ! -e /dev/ipmi0 && ! -e /dev/ipmi/0 ]]; then
   echo "also run container with --privileged -v /dev:/dev -v /sys:/sys (rw for /dev)" >&2
   exit 1
 fi
+if ! ls /dev/i2c-* >/dev/null 2>&1; then
+  echo "i2c devices not visible in container; temperature/fan probes may be unavailable. Ensure i2c_i801 and i2c_smbus are loaded and /dev is passed through." >&2
+fi
 
 run_omreport_probe() {
   # Run omreport once and log success/failure with a small snippet
@@ -77,7 +80,7 @@ fi
 
 # Run a few probes up front so the log contains useful diagnostics
 run_omreport_probe "chassis summary" chassis
-# run_omreport_probe "chassis temps" chassis temps
+run_omreport_probe "chassis temps" chassis temps
 run_omreport_probe "storage controller" storage controller
 
 # Start collector in background loop

@@ -6,6 +6,7 @@ OMREPORT="/opt/dell/srvadmin/bin/omreport"
 TMP_METRICS="$(mktemp /opt/dell-exporter/metrics.prom.tmp.XXXXXX)"
 trap 'rm -f "$TMP_METRICS"' EXIT
 SMARTCTL_BIN="${SMARTCTL_BIN:-/usr/sbin/smartctl}"
+OMREPORT_FMT="${OMREPORT_FMT:-lst}"
 SMART_BASE_DEVICE="${SMART_BASE_DEVICE:-/dev/sda}"
 SMART_MAX_DRIVES="${SMART_MAX_DRIVES:-6}"
 SMART_ENABLE="${SMART_ENABLE:-true}"
@@ -61,7 +62,12 @@ collect_and_format() {
   out_file="$(mktemp /tmp/omsa_collect.out.XXXXXX)"
 
   set +e
-  "$OMREPORT" "${args[@]}" >"$out_file" 2>"$err_file"
+  cmd=("$OMREPORT")
+  if [[ -n "$OMREPORT_FMT" ]]; then
+    cmd+=(-fmt "$OMREPORT_FMT")
+  fi
+  cmd+=("${args[@]}")
+  "${cmd[@]}" >"$out_file" 2>"$err_file"
   local status=$?
   set -e
 
@@ -83,7 +89,10 @@ collect_and_format() {
   awk -v prefix="${prefix}" '
     /^[A-Za-z]/ {
       gsub(/\r/, "")
-      split($0, kv, ":")
+      line=$0
+      delim=":"
+      if (index(line,";")>0) delim=";"
+      split(line, kv, delim)
       key = kv[1]
       value = kv[2]
 

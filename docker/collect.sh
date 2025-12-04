@@ -36,6 +36,16 @@ emit_metric() {
   printf '%s{%s} %s\n' "$name" "$labels" "$value" >> "$TMP_METRICS"
 }
 
+# Extract the first numeric token from a string (handles "12/34)" or "0-65535" etc.)
+first_numeric() {
+  local s="$*"
+  if [[ $s =~ (-?[0-9]+(\.[0-9]+)?) ]]; then
+    printf '%s' "${BASH_REMATCH[1]}"
+  else
+    printf ''
+  fi
+}
+
 collect_and_format() {
   # Accept the full omreport command as arguments (e.g. chassis temps)
   local args=("$@")
@@ -220,12 +230,26 @@ collect_smart_health() {
 
     # Temperature if present
     temp_c=$(awk '
-      /Current Drive Temperature:/ {for(i=1;i<=NF;i++) if($i ~ /^[0-9]+$/ && $(i+1) ~ /^C/) {print $i; exit}}
-      /Drive Temperature:/ {for(i=1;i<=NF;i++) if($i ~ /^[0-9]+$/ && $(i+1) ~ /^C/) {print $i; exit}}
-      /Temperature_Celsius/ && $1 ~ /^[0-9]+$/ {print $NF; exit}
+      function clean(tok) {
+        if (tok ~ /[0-9]-[0-9]/) { split(tok,a,"-"); tok=a[1] }
+        else if (tok ~ /[0-9]\/[0-9]/) { split(tok,a,"/"); tok=a[1] }
+        gsub(/[^0-9.\-]/,"",tok)
+        return tok
+      }
+      /(Current Drive Temperature:|Drive Temperature:|Temperature_Celsius)/ {
+        for (i=1; i<=NF; i++) {
+          if ($i ~ /[0-9]/) {
+            val = clean($i)
+            if (val != "") { print val; exit }
+          }
+        }
+      }
     ' "$out")
     if [[ -n "$temp_c" ]]; then
-      emit_metric "dell_smart_temp_c" "controller=\"${SMART_CONTROLLER_ID}\",slot=\"${idx}\",device=\"$(sanitize_label "${SMART_BASE_DEVICE}")\"" "$temp_c"
+      temp_c="$(first_numeric "$temp_c")"
+      if [[ -n "$temp_c" ]]; then
+        emit_metric "dell_smart_temp_c" "controller=\"${SMART_CONTROLLER_ID}\",slot=\"${idx}\",device=\"$(sanitize_label "${SMART_BASE_DEVICE}")\"" "$temp_c"
+      fi
     fi
 
     rm -f "$out" "$err"

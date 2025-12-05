@@ -63,10 +63,10 @@ collect_and_format() {
 
   set +e
   cmd=("$OMREPORT")
+  cmd+=("${args[@]}")
   if [[ -n "$OMREPORT_FMT" ]]; then
     cmd+=(-fmt "$OMREPORT_FMT")
   fi
-  cmd+=("${args[@]}")
   "${cmd[@]}" >"$out_file" 2>"$err_file"
   local status=$?
   set -e

@@ -11,6 +11,14 @@ if grep -Eq "GRAFANA_API_KEY_PLACEHOLDER|REPLACE_ME|GRAFANA_USERNAME_PLACEHOLDER
     exit 1
   fi
 
+  # Compute Authorization header for OTLP -> remote_write bridge
+  if command -v base64 >/dev/null 2>&1; then
+    auth_b64="$(printf '%s:%s' "${GRAFANA_USERNAME:-2361797}" "${GRAFANA_API_KEY}" | base64 -w0)"
+    sed -i "s|PROM_REMOTE_AUTH_PLACEHOLDER|${auth_b64}|g" "$AGENT_CONFIG"
+  else
+    echo "base64 not found; cannot populate OTLP remote_write auth header" >&2
+  fi
+
   sed -i "s|GRAFANA_API_KEY_PLACEHOLDER|${GRAFANA_API_KEY}|g" "$AGENT_CONFIG"
   sed -i "s|REPLACE_ME|${GRAFANA_API_KEY}|g" "$AGENT_CONFIG"
   sed -i "s|GRAFANA_USERNAME_PLACEHOLDER|${GRAFANA_USERNAME:-2361797}|g" "$AGENT_CONFIG"

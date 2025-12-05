@@ -91,6 +91,6 @@ COPY agent.yaml /etc/grafana-agent/agent.river
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /opt/dell-exporter/collect.sh /entrypoint.sh
 
-EXPOSE 12345/tcp 5514/tcp 5514/udp
+EXPOSE 12345/tcp 5514/tcp 5514/udp 4317/tcp 4318/tcp
 
 ENTRYPOINT ["/entrypoint.sh"]

@@ -6,8 +6,12 @@ OMREPORT="/opt/dell/srvadmin/bin/omreport"
 
 # Inject Grafana credentials if placeholders are present (or fail fast if missing)
 if grep -Eq "GRAFANA_API_KEY_PLACEHOLDER|REPLACE_ME|GRAFANA_USERNAME_PLACEHOLDER" "$AGENT_CONFIG"; then
+  # Allow GRAFANA_SERVICE_ACCOUNT_TOKEN as an alternate source for the API key
+  if [[ -z "${GRAFANA_API_KEY:-}" && -n "${GRAFANA_SERVICE_ACCOUNT_TOKEN:-}" ]]; then
+    GRAFANA_API_KEY="${GRAFANA_SERVICE_ACCOUNT_TOKEN}"
+  fi
   if [[ -z "${GRAFANA_API_KEY:-}" ]]; then
-    echo "GRAFANA_API_KEY is required to talk to Grafana Cloud" >&2
+    echo "GRAFANA_API_KEY (or GRAFANA_SERVICE_ACCOUNT_TOKEN) is required to talk to Grafana Cloud" >&2
     exit 1
   fi
 

@@ -19,8 +19,7 @@ service:
   telemetry:
     metrics:
       address: ":8888"
-      level: basic
-      disable_process_metrics: true
+      level: none
   pipelines:
     metrics:
       receivers: [otlp]

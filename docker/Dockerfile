@@ -43,9 +43,9 @@ RUN echo "/opt/dell/srvadmin/lib64" > /etc/ld.so.conf.d/srvadmin.conf && ldconfi
 # Install Grafana Agent (Flow-capable) from upstream release (includes otelcol components)
 ARG AGENT_VERSION=0.53.2
 RUN set -eux; \
-    curl -fsSL -o /tmp/agent.zip "https://github.com/grafana/agent/releases/download/v${AGENT_VERSION}/grafana-agent-linux-amd64.zip"; \
+    curl -fsSL -o /tmp/agent.zip "https://github.com/grafana/agent/releases/download/v${AGENT_VERSION}/grafana-agent-${AGENT_VERSION}-linux-amd64.zip"; \
     unzip /tmp/agent.zip -d /tmp/agent; \
-    install -m755 /tmp/agent/grafana-agent-linux-amd64 /usr/bin/grafana-agent; \
+    install -m755 "/tmp/agent/grafana-agent-${AGENT_VERSION}-linux-amd64" /usr/bin/grafana-agent; \
     ln -sf /usr/bin/grafana-agent /usr/bin/grafana-agent-flow; \
     /usr/bin/grafana-agent --version; \
     rm -rf /tmp/agent /tmp/agent.zip

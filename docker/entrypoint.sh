@@ -6,29 +6,39 @@ OMREPORT="/opt/dell/srvadmin/bin/omreport"
 
 # Inject Grafana credentials if placeholders are present (or fail fast if missing)
 if grep -Eq "GRAFANA_API_KEY_PLACEHOLDER|REPLACE_ME|GRAFANA_USERNAME_PLACEHOLDER|PROM_REMOTE_AUTH_PLACEHOLDER" "$AGENT_CONFIG" /etc/otelcol/config.yaml 2>/dev/null; then
-  # Allow multiple env sources for the token
-  if [[ -z "${GRAFANA_API_KEY:-}" ]]; then
-    if [[ -n "${GRAFANA_SERVICE_ACCOUNT_TOKEN:-}" ]]; then
-      GRAFANA_API_KEY="${GRAFANA_SERVICE_ACCOUNT_TOKEN}"
-    elif [[ -n "${GRAFANA_TOKEN:-}" ]]; then
-      GRAFANA_API_KEY="${GRAFANA_TOKEN}"
+  # First, try to use pre-baked credentials already substituted in agent.river (build-time replacement)
+  agent_user="$(awk -F'\"' '/username[ \t]*=/{print $2; exit}' "$AGENT_CONFIG" || true)"
+  agent_pass="$(awk -F'\"' '/password[ \t]*=/{print $2; exit}' "$AGENT_CONFIG" || true)"
+
+  # If not present, fall back to env-based sources
+  if [[ -z "${agent_pass:-}" ]]; then
+    if [[ -z "${GRAFANA_API_KEY:-}" ]]; then
+      if [[ -n "${GRAFANA_SERVICE_ACCOUNT_TOKEN:-}" ]]; then
+        GRAFANA_API_KEY="${GRAFANA_SERVICE_ACCOUNT_TOKEN}"
+      elif [[ -n "${GRAFANA_TOKEN:-}" ]]; then
+        GRAFANA_API_KEY="${GRAFANA_TOKEN}"
+      fi
     fi
+    agent_pass="${GRAFANA_API_KEY:-}"
   fi
-  if [[ -z "${GRAFANA_API_KEY:-}" ]]; then
-    echo "GRAFANA_API_KEY (or GRAFANA_SERVICE_ACCOUNT_TOKEN / GRAFANA_TOKEN) is required to talk to Grafana Cloud" >&2
-  else
-    # Compute Authorization header for OTLP -> remote_write bridge
+  if [[ -z "${agent_user:-}" ]]; then
+    agent_user="${GRAFANA_USERNAME:-2361797}"
+  fi
+
+  if [[ -n "${agent_pass:-}" ]]; then
     if command -v base64 >/dev/null 2>&1; then
-      auth_b64="$(printf '%s:%s' "${GRAFANA_USERNAME:-2361797}" "${GRAFANA_API_KEY}" | base64 -w0)"
+      auth_b64="$(printf '%s:%s' "${agent_user}" "${agent_pass}" | base64 -w0)"
       sed -i "s|PROM_REMOTE_AUTH_PLACEHOLDER|${auth_b64}|g" "$AGENT_CONFIG"
       sed -i "s|PROM_REMOTE_AUTH_PLACEHOLDER|${auth_b64}|g" /etc/otelcol/config.yaml || true
     else
       echo "base64 not found; cannot populate OTLP remote_write auth header" >&2
     fi
 
-    sed -i "s|GRAFANA_API_KEY_PLACEHOLDER|${GRAFANA_API_KEY}|g" "$AGENT_CONFIG"
-    sed -i "s|REPLACE_ME|${GRAFANA_API_KEY}|g" "$AGENT_CONFIG"
-    sed -i "s|GRAFANA_USERNAME_PLACEHOLDER|${GRAFANA_USERNAME:-2361797}|g" "$AGENT_CONFIG"
+    sed -i "s|GRAFANA_API_KEY_PLACEHOLDER|${agent_pass}|g" "$AGENT_CONFIG"
+    sed -i "s|REPLACE_ME|${agent_pass}|g" "$AGENT_CONFIG"
+    sed -i "s|GRAFANA_USERNAME_PLACEHOLDER|${agent_user}|g" "$AGENT_CONFIG"
+  else
+    echo "Warning: no Grafana credentials found for replacement (agent.river or env)." >&2
   fi
 fi
 

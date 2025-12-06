@@ -15,6 +15,7 @@ if grep -Eq "GRAFANA_API_KEY_PLACEHOLDER|REPLACE_ME|GRAFANA_USERNAME_PLACEHOLDER
   if command -v base64 >/dev/null 2>&1; then
     auth_b64="$(printf '%s:%s' "${GRAFANA_USERNAME:-2361797}" "${GRAFANA_API_KEY}" | base64 -w0)"
     sed -i "s|PROM_REMOTE_AUTH_PLACEHOLDER|${auth_b64}|g" "$AGENT_CONFIG"
+    sed -i "s|PROM_REMOTE_AUTH_PLACEHOLDER|${auth_b64}|g" /etc/otelcol/config.yaml || true
   else
     echo "base64 not found; cannot populate OTLP remote_write auth header" >&2
   fi
@@ -99,6 +100,9 @@ echo "Starting metrics collector loop..."
     sleep 60
   done
 ) &
+
+# Start OTLP -> remote_write bridge (otelcol-contrib)
+/usr/bin/otelcol-contrib --config /etc/otelcol/config.yaml >/var/log/otelcol.log 2>&1 &
 
 # Optional: Fluent Bit syslog receiver -> GCP Cloud Logging
 ENABLE_SYSLOG_FORWARDING="${ENABLE_SYSLOG_FORWARDING:-false}"

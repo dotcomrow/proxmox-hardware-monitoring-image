@@ -1,0 +1,23 @@
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  batch: {}
+
+exporters:
+  prometheusremotewrite:
+    endpoint: https://prometheus-prod-56-prod-us-east-2.grafana.net/api/prom/push
+    headers:
+      Authorization: Basic PROM_REMOTE_AUTH_PLACEHOLDER
+
+service:
+  pipelines:
+    metrics:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [prometheusremotewrite]

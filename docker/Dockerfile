@@ -24,7 +24,7 @@ RUN dnf -y install \
 
 # Create working and export directories
 WORKDIR /opt/omsa
-RUN mkdir -p /opt/dell-exporter /etc/grafana-agent
+RUN mkdir -p /opt/dell-exporter /etc/grafana-agent /etc/otelcol
 
 # Download OMSA 10.1 and install the RHEL8 x86_64 RPMs
 RUN set -eux; \
@@ -40,15 +40,29 @@ ENV PATH="/opt/dell/srvadmin/bin:/opt/dell/srvadmin/sbin:${PATH}"
 ENV LD_LIBRARY_PATH=/opt/dell/srvadmin/lib64
 RUN echo "/opt/dell/srvadmin/lib64" > /etc/ld.so.conf.d/srvadmin.conf && ldconfig
 
-# Install Grafana Agent (Flow-capable) from upstream release (includes otelcol components)
-ARG AGENT_VERSION=0.53.2
+# Install Grafana Agent Flow from official repo (textfile scrape) and OpenTelemetry Collector Contrib for OTLP bridge
 RUN set -eux; \
-    curl -fsSL -o /tmp/agent.zip "https://github.com/grafana/agent/releases/download/v${AGENT_VERSION}/grafana-agent-${AGENT_VERSION}-linux-amd64.zip"; \
-    unzip /tmp/agent.zip -d /tmp/agent; \
-    install -m755 "/tmp/agent/grafana-agent-${AGENT_VERSION}-linux-amd64" /usr/bin/grafana-agent; \
-    ln -sf /usr/bin/grafana-agent /usr/bin/grafana-agent-flow; \
+    wget -q -O /etc/pki/rpm-grafana.key https://rpm.grafana.com/gpg.key; \
+    rpm --import /etc/pki/rpm-grafana.key; \
+    printf '%s\n' \
+      '[grafana]' \
+      'name=grafana' \
+      'baseurl=https://rpm.grafana.com' \
+      'repo_gpgcheck=0' \
+      'enabled=1' \
+      'gpgcheck=1' \
+      'gpgkey=https://rpm.grafana.com/gpg.key' \
+      'sslverify=1' \
+      'sslcacert=/etc/pki/tls/certs/ca-bundle.crt' \
+      > /etc/yum.repos.d/grafana.repo; \
+    dnf -y update && dnf -y install grafana-agent-flow; \
+    OTEL_VERSION="0.98.0"; \
+    curl -fsSL -o /tmp/otelcol.tar.gz "https://github.com/open-telemetry/opentelemetry-collector-releases/releases/download/v${OTEL_VERSION}/otelcol-contrib_${OTEL_VERSION}_linux_amd64.tar.gz"; \
+    tar -xzf /tmp/otelcol.tar.gz -C /tmp; \
+    install -m755 /tmp/otelcol-contrib /usr/bin/otelcol-contrib; \
     /usr/bin/grafana-agent --version; \
-    rm -rf /tmp/agent /tmp/agent.zip
+    /usr/bin/otelcol-contrib --version; \
+    rm -rf /tmp/otelcol.tar.gz /tmp/otelcol* /var/cache/dnf
 
 # Install Fluent Bit (optional syslog -> GCP Cloud Logging forwarding)
 RUN set -eux; \
@@ -81,6 +95,7 @@ RUN echo 'server "default" { log_level = "info" } loki.write "default" { endpoin
 # Add real collector and config
 COPY collect.sh /opt/dell-exporter/collect.sh
 COPY agent.yaml /etc/grafana-agent/agent.river
+COPY otelcol.yaml /etc/otelcol/config.yaml
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /opt/dell-exporter/collect.sh /entrypoint.sh
 

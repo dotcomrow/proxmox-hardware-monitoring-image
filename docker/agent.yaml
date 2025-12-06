@@ -27,7 +27,7 @@ prometheus.scrape "ipmi_exporter" {
   scrape_interval = "60s"
   targets    = ["127.0.0.1:9290"]
   params = {
-    "target" = ["localhost"]
+    "target" = ["localhost"],
     "module" = ["default"]
   }
   job_name   = "ipmi_exporter"

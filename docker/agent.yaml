@@ -22,7 +22,7 @@ prometheus.remote_write "grafana" {
   }
 }
 
-# OTLP ingress -> forward to Grafana Cloud via remote_write
+// OTLP ingress -> forward to Grafana Cloud via remote_write
 otelcol.receiver.otlp "proxmox" {
   protocols {
     grpc {
@@ -39,7 +39,7 @@ otelcol.processor.batch "default" {}
 otelcol.exporter.prometheusremotewrite "grafana" {
   endpoint = "https://prometheus-prod-56-prod-us-east-2.grafana.net/api/prom/push"
   headers = {
-    Authorization = "Basic PROM_REMOTE_AUTH_PLACEHOLDER"
+    "Authorization" = "Basic PROM_REMOTE_AUTH_PLACEHOLDER"
   }
 }
 

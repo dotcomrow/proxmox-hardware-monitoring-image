@@ -21,28 +21,3 @@ prometheus.remote_write "grafana" {
     }
   }
 }
-
-// OTLP ingress -> forward to Grafana Cloud via remote_write
-otelcol.receiver.otlp "proxmox" {
-  protocols {
-    grpc {
-      endpoint = "0.0.0.0:4317"
-    }
-    http {
-      endpoint = "0.0.0.0:4318"
-    }
-  }
-}
-
-otelcol.processor.batch "default" {}
-
-otelcol.exporter.prometheusremotewrite "grafana" {
-  endpoint = "https://prometheus-prod-56-prod-us-east-2.grafana.net/api/prom/push"
-  headers = {"Authorization" = ["Basic PROM_REMOTE_AUTH_PLACEHOLDER"]}
-}
-
-otelcol.pipeline.metrics "proxmox" {
-  receivers  = [otelcol.receiver.otlp.proxmox]
-  processors = [otelcol.processor.batch.default]
-  exporters  = [otelcol.exporter.prometheusremotewrite.grafana]
-}

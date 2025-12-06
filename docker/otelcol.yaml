@@ -16,6 +16,11 @@ exporters:
       Authorization: Basic PROM_REMOTE_AUTH_PLACEHOLDER
 
 service:
+  telemetry:
+    metrics:
+      address: ":8888"
+      level: basic
+      disable_process_metrics: true
   pipelines:
     metrics:
       receivers: [otlp]

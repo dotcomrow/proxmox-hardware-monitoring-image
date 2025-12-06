@@ -38,9 +38,7 @@ otelcol.processor.batch "default" {}
 
 otelcol.exporter.prometheusremotewrite "grafana" {
   endpoint = "https://prometheus-prod-56-prod-us-east-2.grafana.net/api/prom/push"
-  headers = {
-    "Authorization" = "Basic PROM_REMOTE_AUTH_PLACEHOLDER"
-  }
+  headers = {"Authorization" = ["Basic PROM_REMOTE_AUTH_PLACEHOLDER"]}
 }
 
 otelcol.pipeline.metrics "proxmox" {

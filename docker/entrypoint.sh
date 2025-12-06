@@ -172,7 +172,7 @@ if [[ "$ENABLE_SYSLOG_FORWARDING" == "true" ]]; then
     Listen 0.0.0.0
     Port   ${SYSLOG_PORT}
     Mode   ${SYSLOG_MODE}
-    Parser syslog-rfc3164
+    Parser syslog-rfc5424
     Tag    syslog
 
 [FILTER]

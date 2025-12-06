@@ -114,4 +114,6 @@ jobs:
 
     - name: Prune old images for this repo
       run: |
-        docker image prune -a -f --filter="reference=ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}:*"
+        docker images --format '{{.Repository}}:{{.Tag}} {{.ID}}' \
+          | awk '/^ghcr.io\/${{ github.repository_owner }}\/${{ env.IMAGE_NAME }}:/ {print $2}' \
+          | xargs -r docker rmi

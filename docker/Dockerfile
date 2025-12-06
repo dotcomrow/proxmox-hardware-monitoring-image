@@ -40,22 +40,15 @@ ENV PATH="/opt/dell/srvadmin/bin:/opt/dell/srvadmin/sbin:${PATH}"
 ENV LD_LIBRARY_PATH=/opt/dell/srvadmin/lib64
 RUN echo "/opt/dell/srvadmin/lib64" > /etc/ld.so.conf.d/srvadmin.conf && ldconfig
 
-# Install Grafana Agent Flow from official repo
+# Install Grafana Agent (Flow-capable) from upstream release (includes otelcol components)
+ARG AGENT_VERSION=0.53.2
 RUN set -eux; \
-    wget -q -O /etc/pki/rpm-grafana.key https://rpm.grafana.com/gpg.key; \
-    rpm --import /etc/pki/rpm-grafana.key; \
-    printf '%s\n' \
-      '[grafana]' \
-      'name=grafana' \
-      'baseurl=https://rpm.grafana.com' \
-      'repo_gpgcheck=0' \
-      'enabled=1' \
-      'gpgcheck=1' \
-      'gpgkey=https://rpm.grafana.com/gpg.key' \
-      'sslverify=1' \
-      'sslcacert=/etc/pki/tls/certs/ca-bundle.crt' \
-      > /etc/yum.repos.d/grafana.repo; \
-    dnf -y update && dnf -y install grafana-agent-flow
+    curl -fsSL -o /tmp/agent.zip "https://github.com/grafana/agent/releases/download/v${AGENT_VERSION}/grafana-agent-linux-amd64.zip"; \
+    unzip /tmp/agent.zip -d /tmp/agent; \
+    install -m755 /tmp/agent/grafana-agent-linux-amd64 /usr/bin/grafana-agent; \
+    ln -sf /usr/bin/grafana-agent /usr/bin/grafana-agent-flow; \
+    /usr/bin/grafana-agent --version; \
+    rm -rf /tmp/agent /tmp/agent.zip
 
 # Install Fluent Bit (optional syslog -> GCP Cloud Logging forwarding)
 RUN set -eux; \

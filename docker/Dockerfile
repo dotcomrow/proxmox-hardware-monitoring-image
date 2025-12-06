@@ -65,6 +65,14 @@ RUN set -eux; \
     /usr/bin/otelcol-contrib --version; \
     rm -rf /tmp/otelcol.tar.gz /tmp/otelcol* /var/cache/dnf
 
+# Install ipmi_exporter for IPMI metrics (Prometheus standard)
+ARG IPMI_EXPORTER_VERSION=1.7.0
+RUN set -eux; \
+    curl -fsSL -o /tmp/ipmi_exporter.tar.gz "https://github.com/prometheus-community/ipmi_exporter/releases/download/v${IPMI_EXPORTER_VERSION}/ipmi_exporter-${IPMI_EXPORTER_VERSION}.linux-amd64.tar.gz"; \
+    tar -xzf /tmp/ipmi_exporter.tar.gz -C /tmp; \
+    install -m755 "/tmp/ipmi_exporter-${IPMI_EXPORTER_VERSION}.linux-amd64/ipmi_exporter" /usr/local/bin/ipmi_exporter; \
+    rm -rf /tmp/ipmi_exporter* /var/cache/dnf
+
 # Install Fluent Bit (optional syslog -> GCP Cloud Logging forwarding)
 RUN set -eux; \
     curl -fsSL https://packages.fluentbit.io/fluentbit.key -o /etc/pki/rpm-gpg/RPM-GPG-KEY-FluentBit; \
@@ -97,6 +105,7 @@ RUN echo 'server "default" { log_level = "info" } loki.write "default" { endpoin
 COPY collect.sh /opt/dell-exporter/collect.sh
 COPY agent.yaml /etc/grafana-agent/agent.river
 COPY otelcol.yaml /etc/otelcol/config.yaml
+COPY ipmi_exporter.yml /etc/ipmi_exporter.yml
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /opt/dell-exporter/collect.sh /entrypoint.sh
 

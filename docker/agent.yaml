@@ -21,3 +21,11 @@ prometheus.remote_write "grafana" {
     }
   }
 }
+
+# IPMI exporter scrape (local ipmi_exporter on 9290)
+prometheus.scrape "ipmi_exporter" {
+  scrape_interval = "60s"
+  targets    = ["127.0.0.1:9290/metrics?target=localhost&module=default"]
+  job_name   = "ipmi_exporter"
+  forward_to = [prometheus.remote_write.grafana.receiver]
+}

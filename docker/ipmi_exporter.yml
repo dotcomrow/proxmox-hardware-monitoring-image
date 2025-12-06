@@ -1,0 +1,11 @@
+modules:
+  default:
+    driver: open            # use local /dev/ipmi0
+    user: ""                # not needed for local driver
+    pass: ""
+    collectors:
+      - bmc
+      - chassis
+      - ipmi
+      - dcmi
+      - sel

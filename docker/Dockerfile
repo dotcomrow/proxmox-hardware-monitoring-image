@@ -60,7 +60,8 @@ RUN set -eux; \
     curl -fsSL -o /tmp/otelcol.tar.gz "https://github.com/open-telemetry/opentelemetry-collector-releases/releases/download/v${OTEL_VERSION}/otelcol-contrib_${OTEL_VERSION}_linux_amd64.tar.gz"; \
     tar -xzf /tmp/otelcol.tar.gz -C /tmp; \
     install -m755 /tmp/otelcol-contrib /usr/bin/otelcol-contrib; \
-    /usr/bin/grafana-agent --version; \
+    ln -sf /usr/bin/grafana-agent-flow /usr/bin/grafana-agent; \
+    /usr/bin/grafana-agent-flow --version; \
     /usr/bin/otelcol-contrib --version; \
     rm -rf /tmp/otelcol.tar.gz /tmp/otelcol* /var/cache/dnf
 

@@ -13,6 +13,9 @@ SMART_ENABLE="${SMART_ENABLE:-true}"
 SMART_CONTROLLER_ID="${SMART_CONTROLLER_ID:-0}"
 SMART_DRIVER="${SMART_DRIVER:-sat+megaraid}"
 SMART_DRIVER_FALLBACKS="${SMART_DRIVER_FALLBACKS:-megaraid}"
+# Optional: collect SMART from additional direct devices (e.g., /dev/sdb, /dev/sdc)
+SMART_EXTRA_DEVICES="${SMART_EXTRA_DEVICES:-}"
+SMART_EXTRA_DRIVER="${SMART_EXTRA_DRIVER:-auto}"
 
 if [[ ! -x "$OMREPORT" ]]; then
   echo "omreport not found!" >&2
@@ -266,6 +269,111 @@ collect_smart_health() {
 }
 
 collect_smart_health
+
+# Collect SMART for extra direct devices (e.g., /dev/sdb) using a generic driver (default: auto)
+collect_extra_devices() {
+  [[ -z "${SMART_EXTRA_DEVICES}" ]] && return
+  for dev in ${SMART_EXTRA_DEVICES}; do
+    local out err status
+    out="$(mktemp /tmp/smart.extra.out.XXXXXX)"
+    err="$(mktemp /tmp/smart.extra.err.XXXXXX)"
+    set +e
+    timeout 15 "$SMARTCTL_BIN" -a -d "${SMART_EXTRA_DRIVER}" "$dev" >"$out" 2>"$err"
+    status=$?
+    set -e
+    if [[ ! -s "$out" ]]; then
+      echo "SMART probe failed for device ${dev} (driver ${SMART_EXTRA_DRIVER}) exit ${status}" >&2
+      tail -n 5 "$err" >&2 || true
+      rm -f "$out" "$err"
+      continue
+    fi
+
+    local model serial fw health
+    model="$(grep -E '^(Device Model|Product|Model Family)[[:space:]]*:' "$out" | head -n1 | cut -d: -f2- | xargs || true)"
+    serial="$(grep -E '^Serial Number[[:space:]]*:' "$out" | head -n1 | cut -d: -f2- | xargs || true)"
+    fw="$(grep -E '^(Firmware Version|Revision Number)[[:space:]]*:' "$out" | head -n1 | cut -d: -f2- | xargs || true)"
+    health="$(grep -i 'overall-health self-assessment test result' "$out" | head -n1 | awk -F: '{gsub(/^[ \t]+/,"",$2); print $2}' || true)"
+
+    local health_val=-1
+    if echo "$health" | grep -qi "PASSED"; then
+      health_val=1
+    elif echo "$health" | grep -qi "FAILED"; then
+      health_val=0
+    fi
+
+    local model_s serial_s fw_s slot_label
+    model_s="$(sanitize_label "${model:-unknown}")"
+    serial_s="$(sanitize_label "${serial:-unknown}")"
+    fw_s="$(sanitize_label "${fw:-unknown}")"
+    slot_label="$(sanitize_label "$(basename "$dev")")"
+
+    echo "smartctl extra device ${dev}: model='${model}' serial='${serial}' fw='${fw}' health='${health}' (${health_val})" >&2
+
+    emit_metric "dell_smart_drive_info" "controller=\"extra\",slot=\"${slot_label}\",device=\"$(sanitize_label "${dev}")\",model=\"${model_s}\",serial=\"${serial_s}\",firmware=\"${fw_s}\"" 1
+    emit_metric "dell_smart_drive_health" "controller=\"extra\",slot=\"${slot_label}\",device=\"$(sanitize_label "${dev}")\"" "${health_val}"
+
+    # Per-attribute metrics from SMART attribute table
+    awk -v ctrl="extra" -v slot="${slot_label}" -v dev="$(sanitize_label "${dev}")" '
+      function sanitize(s) { gsub(/[^A-Za-z0-9_]/,"_",s); s=tolower(s); gsub(/^_+|_+$/,"",s); return s }
+      $1 ~ /^[0-9]+$/ && $2 ~ /[A-Za-z0-9_-]/ {
+        id = $1
+        attr = sanitize($2)
+        value = $(4)
+        worst = $(5)
+        thresh = $(6)
+        raw = ""
+        for (i=10; i<=NF; i++) {
+          token=$i
+          if (token ~ /[0-9]/) {
+            if (token ~ /[0-9]-[0-9]/) { split(token,parts,"-"); token=parts[1] }
+            if (token ~ /\//) { split(token,parts,"/"); token=parts[1] }
+            gsub(/[^0-9.\-]/, "", token)
+            if (token == "") continue
+            raw=token
+            break
+          }
+        }
+        if (attr == "") next
+        if (value ~ /^[0-9]+$/) printf "dell_smart_attr_value{controller=\"%s\",slot=\"%s\",device=\"%s\",id=\"%s\",attribute=\"%s\"} %s\n", ctrl, slot, dev, id, attr, value
+        if (worst ~ /^[0-9]+$/) printf "dell_smart_attr_worst{controller=\"%s\",slot=\"%s\",device=\"%s\",id=\"%s\",attribute=\"%s\"} %s\n", ctrl, slot, dev, id, attr, worst
+        if (thresh ~ /^[0-9]+$/) printf "dell_smart_attr_thresh{controller=\"%s\",slot=\"%s\",device=\"%s\",id=\"%s\",attribute=\"%s\"} %s\n", ctrl, slot, dev, id, attr, thresh
+        if (raw != "") printf "dell_smart_attr_raw{controller=\"%s\",slot=\"%s\",device=\"%s\",id=\"%s\",attribute=\"%s\"} %s\n", ctrl, slot, dev, id, attr, raw
+      }
+      /(Non-medium error count|grown defect list|Elements in grown defect list)/ {
+        val=$NF; gsub(/[^0-9.\-]/,"",val); if(val=="") next;
+        key=sanitize($0); printf "dell_smart_attr_raw{controller=\"%s\",slot=\"%s\",device=\"%s\",id=\"sas\",attribute=\"%s\"} %s\n", ctrl, slot, dev, key, val
+      }
+    ' "$out" >>"$TMP_METRICS"
+
+    # Temperature if present
+    temp_c=$(awk '
+      function clean(tok) {
+        if (tok ~ /[0-9]-[0-9]/) { split(tok,a,"-"); tok=a[1] }
+        else if (tok ~ /[0-9]\/[0-9]/) { split(tok,a,"/"); tok=a[1] }
+        gsub(/[^0-9.\-]/,"",tok)
+        return tok
+      }
+      /(Current Drive Temperature:|Drive Temperature:|Temperature_Celsius)/ {
+        for (i=1; i<=NF; i++) {
+          if ($i ~ /[0-9]/) {
+            val = clean($i)
+            if (val != "") { print val; exit }
+          }
+        }
+      }
+    ' "$out")
+    if [[ -n "$temp_c" ]]; then
+      temp_c="$(first_numeric "$temp_c")"
+      if [[ -n "$temp_c" ]]; then
+        emit_metric "dell_smart_temp_c" "controller=\"extra\",slot=\"${slot_label}\",device=\"$(sanitize_label "${dev}")\"" "$temp_c"
+      fi
+    fi
+
+    rm -f "$out" "$err"
+  done
+}
+
+collect_extra_devices
 
 # Atomically replace the metrics file to avoid textfile parser seeing partial writes
 mv "$TMP_METRICS" "$METRICS_FILE"

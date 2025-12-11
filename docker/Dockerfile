@@ -94,7 +94,8 @@ ENV PATH="/opt/fluent-bit/bin:${PATH}"
 
 # SMART monitoring tools (best-effort SMART metrics)
 RUN set -eux; \
-    dnf -y install smartmontools ipmitool; \
+    # ipmitool is handy for manual inspection; freeipmi provides the binaries ipmi_exporter uses
+    dnf -y install smartmontools ipmitool freeipmi; \
     dnf clean all
 
 # Create dummy River config for build-time validation

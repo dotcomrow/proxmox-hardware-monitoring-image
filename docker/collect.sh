@@ -453,11 +453,12 @@ collect_ipmi_split() {
       parse_labels(label_str, kv)
       name=kv["name"]; state=kv["state"]
       if (name == "") next
+      if (state == "" && ("health" in kv) && kv["health"]!="") { state=kv["health"] }
+      if (state == "") next
       metric= sanitize(name); s_state=sanitize(state)
-      if (metric == "") next
+      if (metric == "" || s_state == "") next
       val=$NF; gsub(/^[ \t]+|[ \t]+$/, "", val)
       if (val !~ /^-?[0-9]+(\.[0-9]+)?([eE][-+]?[0-9]+)?$/) next
-      if (s_state == "") s_state="unknown"
       printf "ipmi_sensor_%s_state_%s{sensor=\"%s\",state=\"%s\"} %s\n", metric, s_state, name, state, val
       next
     }

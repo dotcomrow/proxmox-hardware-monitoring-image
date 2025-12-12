@@ -6,7 +6,13 @@ OMREPORT="/opt/dell/srvadmin/bin/omreport"
 TMP_METRICS="$(mktemp /opt/dell-exporter/metrics.prom.tmp.XXXXXX)"
 trap 'rm -f "$TMP_METRICS"' EXIT
 SMARTCTL_BIN="${SMARTCTL_BIN:-/usr/sbin/smartctl}"
-OMREPORT_FMT="${OMREPORT_FMT:-lst}"
+OMREPORT_FMT_RAW="${OMREPORT_FMT:-${OMREPORT_OUTPUT_FORMAT:-ssv}}"
+OMREPORT_FMT_CANON="$(echo "$OMREPORT_FMT_RAW" | tr '[:upper:]' '[:lower:]' | xargs)"
+# Accept common values; fallback to lst if unknown
+case "$OMREPORT_FMT_CANON" in
+  xml|lst|ssv) ;;
+  *) OMREPORT_FMT_CANON="lst" ;;
+esac
 OMREPORT_COMMANDS="${OMREPORT_COMMANDS:-}"
 SMART_BASE_DEVICE="${SMART_BASE_DEVICE:-/dev/sda}"
 SMART_MAX_DRIVES="${SMART_MAX_DRIVES:-6}"
@@ -30,16 +36,16 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "${SCRIPT_DIR}/collect_lib.sh"
 
 # Load format-specific parser
-case "${OMREPORT_FMT,,}" in
+case "${OMREPORT_FMT_CANON}" in
   xml)
     # shellcheck source=collect_lib_xml.sh
     . "${SCRIPT_DIR}/collect_lib_xml.sh"
-    echo "OMREPORT output format: xml" >&2
+    echo "OMREPORT output format: xml (raw='${OMREPORT_FMT_RAW}')" >&2
     ;;
   *)
     # shellcheck source=collect_lib_lst.sh
     . "${SCRIPT_DIR}/collect_lib_lst.sh"
-    echo "OMREPORT output format: ${OMREPORT_FMT:-lst}" >&2
+    echo "OMREPORT output format: ${OMREPORT_FMT_CANON} (raw='${OMREPORT_FMT_RAW}')" >&2
     ;;
 esac
 

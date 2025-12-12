@@ -93,7 +93,7 @@ run_omreport_probe() {
 # Start OMSA daemons directly (avoid DKS driver builds inside the container)
 find /opt/dell/srvadmin/var/run -maxdepth 1 -name "*.pid" -type f -delete 2>/dev/null || true
 /opt/dell/srvadmin/sbin/dsm_om_shrsvcd &
-/opt/dell/srvadmin/sbin/dsm_om_connsvcd &
+/opt/dell/srvadmin/sbin/dsm_om_connsvcd -run &
 /opt/dell/srvadmin/sbin/dsm_sa_eventmgrd &
 /opt/dell/srvadmin/sbin/dsm_sa_datamgrd &
 /opt/dell/srvadmin/sbin/dsm_sa_snmpd &

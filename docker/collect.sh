@@ -34,10 +34,12 @@ case "${OMREPORT_FMT,,}" in
   xml)
     # shellcheck source=collect_lib_xml.sh
     . "${SCRIPT_DIR}/collect_lib_xml.sh"
+    echo "OMREPORT output format: xml" >&2
     ;;
   *)
     # shellcheck source=collect_lib_lst.sh
     . "${SCRIPT_DIR}/collect_lib_lst.sh"
+    echo "OMREPORT output format: ${OMREPORT_FMT:-lst}" >&2
     ;;
 esac
 

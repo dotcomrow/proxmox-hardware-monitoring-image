@@ -104,11 +104,14 @@ RUN echo 'server "default" { log_level = "info" } loki.write "default" { endpoin
 
 # Add real collector and config
 COPY collect.sh /opt/dell-exporter/collect.sh
+COPY collect_lib.sh /opt/dell-exporter/collect_lib.sh
+COPY collect_lib_lst.sh /opt/dell-exporter/collect_lib_lst.sh
+COPY collect_lib_xml.sh /opt/dell-exporter/collect_lib_xml.sh
 COPY agent.yaml /etc/grafana-agent/agent.river
 COPY otelcol.yaml /etc/otelcol/config.yaml
 COPY ipmi_exporter.yml /etc/ipmi_exporter.yml
 COPY entrypoint.sh /entrypoint.sh
-RUN chmod +x /opt/dell-exporter/collect.sh /entrypoint.sh
+RUN chmod +x /opt/dell-exporter/collect.sh /opt/dell-exporter/collect_lib.sh /opt/dell-exporter/collect_lib_lst.sh /opt/dell-exporter/collect_lib_xml.sh /entrypoint.sh
 
 EXPOSE 12345/tcp 5514/tcp 5514/udp 4317/tcp 4318/tcp
 

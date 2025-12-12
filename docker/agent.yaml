@@ -25,7 +25,7 @@ prometheus.remote_write "grafana" {
 prometheus.scrape "ipmi_exporter" {
   job_name        = "ipmi_exporter"
   scrape_interval = "60s"
-  metrics_path    = "/metrics" # use local collector for /dev/ipmi0
+  metrics_path    = "/metrics"
   targets = [{
     __address__ = "127.0.0.1:9290",
   }]

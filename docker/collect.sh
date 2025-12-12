@@ -13,6 +13,8 @@ case "$OMREPORT_FMT_CANON" in
   xml|lst|ssv) ;;
   *) OMREPORT_FMT_CANON="lst" ;;
 esac
+# Export canonical value for downstream parsers
+OMREPORT_FMT="$OMREPORT_FMT_CANON"
 OMREPORT_COMMANDS="${OMREPORT_COMMANDS:-}"
 SMART_BASE_DEVICE="${SMART_BASE_DEVICE:-/dev/sda}"
 SMART_MAX_DRIVES="${SMART_MAX_DRIVES:-6}"

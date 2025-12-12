@@ -502,5 +502,63 @@ collect_ipmi_split() {
 
 collect_ipmi_split
 
+# Generic fan-out: duplicate metrics with common labels into label-less, name-encoded series
+fan_out_metrics() {
+  local in="$TMP_METRICS"
+  local out
+  out="$(mktemp /tmp/metrics.fanout.XXXXXX)"
+
+  awk '
+    function sanitize(s) { gsub(/[^A-Za-z0-9_]/,"_",s); s=tolower(s); gsub(/^_+|_+$/,"",s); gsub(/_+/,"_",s); return s }
+    function parse_labels(str, kv,   n,i,part,key,val) {
+      n = split(str, partlist, ",")
+      for (i=1; i<=n; i++) {
+        part=partlist[i]
+        split(part, kvpair, "=")
+        key=kvpair[1]; val=kvpair[2]
+        gsub(/^[ \t]+|[ \t]+$/, "", key)
+        gsub(/^[ \t]+|[ \t]+$/, "", val)
+        gsub(/^"/, "", val); gsub(/"$/, "", val)
+        kv[key]=val
+      }
+    }
+    /^[^#].*\{/ {
+      if (match($0, /^([A-Za-z0-9_:]+)\{([^}]*)\}[ \t]+([-+0-9.eE]+)/, m) != 3) { print $0; next }
+      metric=m[1]; label_str=m[2]; val=m[3]
+      print $0
+      delete kv
+      parse_labels(label_str, kv)
+      # Build suffix for drive/slot/controller/device style metrics
+      suffix=""
+      if ("controller" in kv) suffix = suffix "_ctrl_" sanitize(kv["controller"])
+      if ("slot" in kv)       suffix = suffix "_slot_" sanitize(kv["slot"])
+      if ("device" in kv)     suffix = suffix "_dev_" sanitize(kv["device"])
+      # Sensor/name fan-out (ipmi)
+      if ("sensor" in kv)     suffix = suffix "_sensor_" sanitize(kv["sensor"])
+      if (suffix == "" && ("name" in kv)) suffix = suffix "_name_" sanitize(kv["name"])
+
+      if (suffix != "") {
+        # Rebuild labels excluding the identity fields used in suffix
+        out_labels=""
+        for (k in kv) {
+          if (k=="controller" || k=="slot" || k=="device" || k=="sensor" || k=="name") continue
+          v=kv[k]; gsub(/"/,"",v)
+          if (out_labels == "") out_labels = sprintf("%s=\"%s\"", k, v)
+          else out_labels = sprintf("%s,%s=\"%s\"", out_labels, k, v)
+        }
+        new_metric = metric suffix
+        if (out_labels == "") printf "%s %s\n", new_metric, val >> "'"$out"'"
+        else printf "%s{%s} %s\n", new_metric, out_labels, val >> "'"$out"'"
+      }
+      next
+    }
+    { print $0 }
+  ' "$in" >"$out"
+
+  mv "$out" "$TMP_METRICS"
+}
+
+fan_out_metrics
+
 # Atomically replace the metrics file to avoid textfile parser seeing partial writes
 mv "$TMP_METRICS" "$METRICS_FILE"

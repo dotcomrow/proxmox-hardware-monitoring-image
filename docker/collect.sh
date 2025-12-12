@@ -462,6 +462,35 @@ collect_ipmi_split() {
       printf "ipmi_sensor_%s_state_%s{sensor=\"%s\",state=\"%s\"} %s\n", metric, s_state, name, state, val
       next
     }
+    # Generic fan-out for any ipmi_* metric that carries a name label (single metric per measurement)
+    /^ipmi_[a-zA-Z0-9_]+\{/ {
+      if (match($0, /^([a-zA-Z0-9_:]+)\{/, m) != 1) next
+      base=m[1]
+      label_str=$0
+      sub(/^[^{]*\{/,"",label_str)
+      sub(/\}[ \t]+.*/,"",label_str)
+      delete kv
+      parse_labels(label_str, kv)
+      if (!("name" in kv)) next
+      name=kv["name"]
+      delete kv["name"]
+      if (name == "") next
+      val=$NF; gsub(/^[ \t]+|[ \t]+$/, "", val)
+      if (val !~ /^-?[0-9]+(\.[0-9]+)?([eE][-+]?[0-9]+)?$/) next
+      metric = sanitize(base)
+      sensor = sanitize(name)
+      if (metric == "" || sensor == "") next
+      # rebuild remaining labels (keep context like unit/state/etc.)
+      out_labels=""
+      for (k in kv) {
+        v=kv[k]; gsub(/"/,"",v)
+        if (out_labels == "") out_labels = sprintf("%s=\"%s\"", k, v)
+        else out_labels = sprintf("%s,%s=\"%s\"", out_labels, k, v)
+      }
+      if (out_labels == "") printf "%s_%s %s\n", metric, sensor, val
+      else printf "%s_%s{%s} %s\n", metric, sensor, out_labels, val
+      next
+    }
   ' "$out" >>"$TMP_METRICS"
 
   after=$(wc -l <"$TMP_METRICS" || echo 0)

@@ -530,18 +530,19 @@ fan_out_metrics() {
       parse_labels(label_str, kv)
       # Build suffix for drive/slot/controller/device style metrics
       suffix=""
-      if ("controller" in kv) suffix = suffix "_ctrl_" sanitize(kv["controller"])
       if ("slot" in kv)       suffix = suffix "_slot_" sanitize(kv["slot"])
+      if ("controller" in kv) suffix = suffix "_ctrl_" sanitize(kv["controller"])
       if ("device" in kv)     suffix = suffix "_dev_" sanitize(kv["device"])
-      # Sensor/name fan-out (ipmi)
       if ("sensor" in kv)     suffix = suffix "_sensor_" sanitize(kv["sensor"])
-      if (suffix == "" && ("name" in kv)) suffix = suffix "_name_" sanitize(kv["name"])
+      if ("name" in kv)       suffix = suffix "_name_" sanitize(kv["name"])
+      if ("attribute" in kv)  suffix = suffix "_attr_" sanitize(kv["attribute"])
+      if ("id" in kv)         suffix = suffix "_id_" sanitize(kv["id"])
 
       if (suffix != "") {
         # Rebuild labels excluding the identity fields used in suffix
         out_labels=""
         for (k in kv) {
-          if (k=="controller" || k=="slot" || k=="device" || k=="sensor" || k=="name") continue
+          if (k=="controller" || k=="slot" || k=="device" || k=="sensor" || k=="name" || k=="attribute" || k=="id") continue
           v=kv[k]; gsub(/"/,"",v)
           if (out_labels == "") out_labels = sprintf("%s=\"%s\"", k, v)
           else out_labels = sprintf("%s,%s=\"%s\"", out_labels, k, v)

@@ -114,6 +114,12 @@ run_omreport_probe "chassis summary" chassis
 run_omreport_probe "chassis temps" chassis temps
 run_omreport_probe "storage controller" storage controller
 
+# Start ipmi_exporter (local /dev/ipmi0 -> Prometheus metrics on 127.0.0.1:9290)
+/usr/local/bin/ipmi_exporter \
+  --config.file=/etc/ipmi_exporter.yml \
+  --web.listen-address=:9290 \
+  >/var/log/ipmi_exporter.log 2>&1 &
+
 # Start collector in background loop
 echo "Starting metrics collector loop..."
 (
@@ -125,12 +131,6 @@ echo "Starting metrics collector loop..."
 
 # Start OTLP -> remote_write bridge (otelcol-contrib)
 /usr/bin/otelcol-contrib --config /etc/otelcol/config.yaml >/var/log/otelcol.log 2>&1 &
-
-# Start ipmi_exporter (local /dev/ipmi0 -> Prometheus metrics on 127.0.0.1:9290)
-/usr/local/bin/ipmi_exporter \
-  --config.file=/etc/ipmi_exporter.yml \
-  --web.listen-address=:9290 \
-  >/var/log/ipmi_exporter.log 2>&1 &
 
 # Optional: Fluent Bit syslog receiver -> GCP Cloud Logging
 ENABLE_SYSLOG_FORWARDING="${ENABLE_SYSLOG_FORWARDING:-false}"

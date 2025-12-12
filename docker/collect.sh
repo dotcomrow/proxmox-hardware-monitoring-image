@@ -16,6 +16,7 @@ SMART_DRIVER_FALLBACKS="${SMART_DRIVER_FALLBACKS:-megaraid}"
 # Optional: collect SMART from additional direct devices (e.g., /dev/sdb, /dev/sdc)
 SMART_EXTRA_DEVICES="${SMART_EXTRA_DEVICES:-}"
 SMART_EXTRA_DRIVER="${SMART_EXTRA_DRIVER:-auto}"
+IPMI_SPLIT_SOURCE="${IPMI_SPLIT_SOURCE:-http://127.0.0.1:9290/metrics}"
 
 if [[ ! -x "$OMREPORT" ]]; then
   echo "omreport not found!" >&2
@@ -228,15 +229,28 @@ collect_smart_health() {
           }
         }
         if (attr == "") next
-        if (value ~ /^[0-9]+$/) printf "dell_smart_attr_value{controller=\"%s\",slot=\"%s\",device=\"%s\",id=\"%s\",attribute=\"%s\"} %s\n", ctrl, slot, dev, id, attr, value
-        if (worst ~ /^[0-9]+$/) printf "dell_smart_attr_worst{controller=\"%s\",slot=\"%s\",device=\"%s\",id=\"%s\",attribute=\"%s\"} %s\n", ctrl, slot, dev, id, attr, worst
-        if (thresh ~ /^[0-9]+$/) printf "dell_smart_attr_thresh{controller=\"%s\",slot=\"%s\",device=\"%s\",id=\"%s\",attribute=\"%s\"} %s\n", ctrl, slot, dev, id, attr, thresh
-        if (raw != "") printf "dell_smart_attr_raw{controller=\"%s\",slot=\"%s\",device=\"%s\",id=\"%s\",attribute=\"%s\"} %s\n", ctrl, slot, dev, id, attr, raw
+        if (value ~ /^[0-9]+$/) {
+          printf "dell_smart_attr_value{controller=\"%s\",slot=\"%s\",device=\"%s\",id=\"%s\",attribute=\"%s\"} %s\n", ctrl, slot, dev, id, attr, value
+          printf "dell_smart_attr_value_%s{controller=\"%s\",slot=\"%s\",device=\"%s\",id=\"%s\"} %s\n", attr, ctrl, slot, dev, id, value
+        }
+        if (worst ~ /^[0-9]+$/) {
+          printf "dell_smart_attr_worst{controller=\"%s\",slot=\"%s\",device=\"%s\",id=\"%s\",attribute=\"%s\"} %s\n", ctrl, slot, dev, id, attr, worst
+          printf "dell_smart_attr_worst_%s{controller=\"%s\",slot=\"%s\",device=\"%s\",id=\"%s\"} %s\n", attr, ctrl, slot, dev, id, worst
+        }
+        if (thresh ~ /^[0-9]+$/) {
+          printf "dell_smart_attr_thresh{controller=\"%s\",slot=\"%s\",device=\"%s\",id=\"%s\",attribute=\"%s\"} %s\n", ctrl, slot, dev, id, attr, thresh
+          printf "dell_smart_attr_thresh_%s{controller=\"%s\",slot=\"%s\",device=\"%s\",id=\"%s\"} %s\n", attr, ctrl, slot, dev, id, thresh
+        }
+        if (raw != "") {
+          printf "dell_smart_attr_raw{controller=\"%s\",slot=\"%s\",device=\"%s\",id=\"%s\",attribute=\"%s\"} %s\n", ctrl, slot, dev, id, attr, raw
+          printf "dell_smart_attr_raw_%s{controller=\"%s\",slot=\"%s\",device=\"%s\",id=\"%s\"} %s\n", attr, ctrl, slot, dev, id, raw
+        }
       }
       # SAS-style counters
       /(Non-medium error count|grown defect list|Elements in grown defect list)/ {
         val=$NF; gsub(/[^0-9.\-]/,"",val); if(val=="") next;
         key=sanitize($0); printf "dell_smart_attr_raw{controller=\"%s\",slot=\"%s\",device=\"%s\",id=\"sas\",attribute=\"%s\"} %s\n", ctrl, slot, dev, key, val
+        printf "dell_smart_attr_raw_%s{controller=\"%s\",slot=\"%s\",device=\"%s\",id=\"sas\"} %s\n", key, ctrl, slot, dev, val
       }
     ' "$out" >>"$TMP_METRICS"
 
@@ -334,14 +348,27 @@ collect_extra_devices() {
           }
         }
         if (attr == "") next
-        if (value ~ /^[0-9]+$/) printf "dell_smart_attr_value{controller=\"%s\",slot=\"%s\",device=\"%s\",id=\"%s\",attribute=\"%s\"} %s\n", ctrl, slot, dev, id, attr, value
-        if (worst ~ /^[0-9]+$/) printf "dell_smart_attr_worst{controller=\"%s\",slot=\"%s\",device=\"%s\",id=\"%s\",attribute=\"%s\"} %s\n", ctrl, slot, dev, id, attr, worst
-        if (thresh ~ /^[0-9]+$/) printf "dell_smart_attr_thresh{controller=\"%s\",slot=\"%s\",device=\"%s\",id=\"%s\",attribute=\"%s\"} %s\n", ctrl, slot, dev, id, attr, thresh
-        if (raw != "") printf "dell_smart_attr_raw{controller=\"%s\",slot=\"%s\",device=\"%s\",id=\"%s\",attribute=\"%s\"} %s\n", ctrl, slot, dev, id, attr, raw
+        if (value ~ /^[0-9]+$/) {
+          printf "dell_smart_attr_value{controller=\"%s\",slot=\"%s\",device=\"%s\",id=\"%s\",attribute=\"%s\"} %s\n", ctrl, slot, dev, id, attr, value
+          printf "dell_smart_attr_value_%s{controller=\"%s\",slot=\"%s\",device=\"%s\",id=\"%s\"} %s\n", attr, ctrl, slot, dev, id, value
+        }
+        if (worst ~ /^[0-9]+$/) {
+          printf "dell_smart_attr_worst{controller=\"%s\",slot=\"%s\",device=\"%s\",id=\"%s\",attribute=\"%s\"} %s\n", ctrl, slot, dev, id, attr, worst
+          printf "dell_smart_attr_worst_%s{controller=\"%s\",slot=\"%s\",device=\"%s\",id=\"%s\"} %s\n", attr, ctrl, slot, dev, id, worst
+        }
+        if (thresh ~ /^[0-9]+$/) {
+          printf "dell_smart_attr_thresh{controller=\"%s\",slot=\"%s\",device=\"%s\",id=\"%s\",attribute=\"%s\"} %s\n", ctrl, slot, dev, id, attr, thresh
+          printf "dell_smart_attr_thresh_%s{controller=\"%s\",slot=\"%s\",device=\"%s\",id=\"%s\"} %s\n", attr, ctrl, slot, dev, id, thresh
+        }
+        if (raw != "") {
+          printf "dell_smart_attr_raw{controller=\"%s\",slot=\"%s\",device=\"%s\",id=\"%s\",attribute=\"%s\"} %s\n", ctrl, slot, dev, id, attr, raw
+          printf "dell_smart_attr_raw_%s{controller=\"%s\",slot=\"%s\",device=\"%s\",id=\"%s\"} %s\n", attr, ctrl, slot, dev, id, raw
+        }
       }
       /(Non-medium error count|grown defect list|Elements in grown defect list)/ {
         val=$NF; gsub(/[^0-9.\-]/,"",val); if(val=="") next;
         key=sanitize($0); printf "dell_smart_attr_raw{controller=\"%s\",slot=\"%s\",device=\"%s\",id=\"sas\",attribute=\"%s\"} %s\n", ctrl, slot, dev, key, val
+        printf "dell_smart_attr_raw_%s{controller=\"%s\",slot=\"%s\",device=\"%s\",id=\"sas\"} %s\n", key, ctrl, slot, dev, val
       }
     ' "$out" >>"$TMP_METRICS"
 
@@ -374,6 +401,76 @@ collect_extra_devices() {
 }
 
 collect_extra_devices
+
+collect_ipmi_split() {
+  local src="${IPMI_SPLIT_SOURCE}"
+  local out err before after produced
+  out="$(mktemp /tmp/ipmi_split.out.XXXXXX)"
+  err="$(mktemp /tmp/ipmi_split.err.XXXXXX)"
+
+  if ! wget -qO "$out" "$src" 2>"$err"; then
+    echo "ipmi_split: failed to scrape ${src}; ipmi_exporter not ready? ($(tail -n1 "$err" || true))" >&2
+    rm -f "$out" "$err"
+    return
+  fi
+
+  before=$(wc -l <"$TMP_METRICS" || echo 0)
+  awk '
+    function sanitize(s) { gsub(/[^A-Za-z0-9_]/,"_",s); s=tolower(s); gsub(/^_+|_+$/,"",s); gsub(/_+/,"_",s); return s }
+    function parse_labels(str, kv,   n,i,part,key,val) {
+      n = split(str, partlist, ",")
+      for (i=1; i<=n; i++) {
+        part=partlist[i]
+        split(part, kvpair, "=")
+        key=kvpair[1]; val=kvpair[2]
+        gsub(/^[ \t]+|[ \t]+$/, "", key)
+        gsub(/^[ \t]+|[ \t]+$/, "", val)
+        gsub(/^"/, "", val); gsub(/"$/, "", val)
+        kv[key]=val
+      }
+    }
+    /^ipmi_sensor_value\{/ {
+      label_str=$0
+      sub(/^ipmi_sensor_value\{/,"",label_str)
+      sub(/\}[ \t]+.*/,"",label_str)
+      delete kv
+      parse_labels(label_str, kv)
+      name=kv["name"]
+      if (name == "") next
+      metric= sanitize(name)
+      if (metric == "") next
+      val=$NF; gsub(/^[ \t]+|[ \t]+$/, "", val)
+      if (val !~ /^-?[0-9]+(\.[0-9]+)?([eE][-+]?[0-9]+)?$/) next
+      unit=(("unit" in kv && kv["unit"]!="") ? kv["unit"] : (("type" in kv)?kv["type"]:""))
+      printf "ipmi_sensor_%s{sensor=\"%s\",unit=\"%s\"} %s\n", metric, name, unit, val
+      next
+    }
+    /^ipmi_sensor_state\{/ {
+      label_str=$0
+      sub(/^ipmi_sensor_state\{/,"",label_str)
+      sub(/\}[ \t]+.*/,"",label_str)
+      delete kv
+      parse_labels(label_str, kv)
+      name=kv["name"]; state=kv["state"]
+      if (name == "") next
+      metric= sanitize(name); s_state=sanitize(state)
+      if (metric == "") next
+      val=$NF; gsub(/^[ \t]+|[ \t]+$/, "", val)
+      if (val !~ /^-?[0-9]+(\.[0-9]+)?([eE][-+]?[0-9]+)?$/) next
+      if (s_state == "") s_state="unknown"
+      printf "ipmi_sensor_%s_state_%s{sensor=\"%s\",state=\"%s\"} %s\n", metric, s_state, name, state, val
+      next
+    }
+  ' "$out" >>"$TMP_METRICS"
+
+  after=$(wc -l <"$TMP_METRICS" || echo 0)
+  produced=$((after - before))
+  echo "Collected ${produced} ipmi per-sensor fan-out metrics from ${src}" >&2
+
+  rm -f "$out" "$err"
+}
+
+collect_ipmi_split
 
 # Atomically replace the metrics file to avoid textfile parser seeing partial writes
 mv "$TMP_METRICS" "$METRICS_FILE"

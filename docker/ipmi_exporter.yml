@@ -1,12 +1,22 @@
-modules:
-  default:
-    driver: open            # use local /dev/ipmi0
-    user: ""                # not needed for local driver
-    pass: ""
-    collectors:
-      - bmc
-      - chassis
-      - ipmi
-      - dcmi
-      - sm-lan-mode         # LAN mode/status details
-      - sel
+modules:  
+  default:  
+    driver: open            # use local /dev/ipmi0  
+    user: ""                # not needed for local driver  
+    pass: ""  
+    privilege: "user"       # Add explicit privilege level  
+    timeout: 10000          # Add timeout  
+    collectors:  
+      - bmc  
+      - chassis  
+      - ipmi  
+      - dcmi  
+      - sm-lan-mode  
+      - sel  
+    # IMPORTANT: Don't exclude any sensors  
+    exclude_sensor_ids: []  
+    # Optionally, explicitly include sensor types (if your exporter supports it)  
+    # sensor_types:  
+    #   - Temperature  
+    #   - Voltage  
+    #   - Current  
+    #   - Fan  

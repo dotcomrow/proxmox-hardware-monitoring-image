@@ -8,4 +8,5 @@ modules:
       - chassis
       - ipmi
       - dcmi
+      - sm-lan-mode         # LAN mode/status details
       - sel

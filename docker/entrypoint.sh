@@ -114,7 +114,6 @@ fi
 
 # Run a few probes up front so the log contains useful diagnostics
 run_omreport_probe "chassis summary" chassis
-run_omreport_probe "chassis temps" chassis temps
 run_omreport_probe "storage controller" storage controller
 
 # Start ipmi_exporter (local /dev/ipmi0 -> Prometheus metrics on 127.0.0.1:9290)

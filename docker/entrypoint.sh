@@ -91,8 +91,11 @@ run_omreport_probe() {
 }
 
 # Start OMSA daemons directly (avoid DKS driver builds inside the container)
-/opt/dell/srvadmin/sbin/dsm_sa_datamgrd &
+find /opt/dell/srvadmin/var/run -maxdepth 1 -name "*.pid" -type f -delete 2>/dev/null || true
+/opt/dell/srvadmin/sbin/dsm_om_shrsvcd &
+/opt/dell/srvadmin/sbin/dsm_om_connsvcd &
 /opt/dell/srvadmin/sbin/dsm_sa_eventmgrd &
+/opt/dell/srvadmin/sbin/dsm_sa_datamgrd &
 /opt/dell/srvadmin/sbin/dsm_sa_snmpd &
 
 # Give OMSA a moment to come up; do not hard-fail, but log readiness issues

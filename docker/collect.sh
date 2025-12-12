@@ -85,9 +85,9 @@ EOF
 
 if [[ -n "$OMREPORT_COMMANDS" ]]; then
   # Allow newline-separated list via env
-  IFS=$'\n' read -r -d '' -a OM_CMDS <<<"$(printf "%s\0" "$OMREPORT_COMMANDS")"
+  mapfile -t OM_CMDS <<<"$OMREPORT_COMMANDS"
 else
-  IFS=$'\n' read -r -d '' -a OM_CMDS <<<"$(load_default_commands; printf '\0')"
+  mapfile -t OM_CMDS < <(load_default_commands)
 fi
 
 for cmd in "${OM_CMDS[@]}"; do

@@ -100,4 +100,5 @@ done
 collect_smart_health
 collect_ipmi_split
 
-mv "$TMP_METRICS" "$METRICS_FILE"
+tr -d '\0' <"$TMP_METRICS" >"${TMP_METRICS}.clean"
+mv "${TMP_METRICS}.clean" "$METRICS_FILE"

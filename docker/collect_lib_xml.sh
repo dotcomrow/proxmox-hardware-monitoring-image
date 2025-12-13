@@ -39,10 +39,13 @@ collect_and_format() {
     return
   fi
 
-  local before after produced
+  local before after produced cleaned
   before=$(wc -l <"$TMP_METRICS" || echo 0)
 
-  python3 - "$out_file" "$prefix" >>"$TMP_METRICS" <<'PYCODE'
+  cleaned="$(mktemp /tmp/omsa_xml_clean.XXXXXX)"
+  tr -d '\0' <"$out_file" >"$cleaned"
+
+  python3 - "$cleaned" "$prefix" >>"$TMP_METRICS" <<'PYCODE'
 import re
 import sys
 import xml.etree.ElementTree as ET
@@ -114,5 +117,5 @@ PYCODE
   produced=$((after - before))
   echo "Collected ${produced} metrics lines from: $label" >&2
 
-  rm -f "$err_file" "$out_file"
+  rm -f "$err_file" "$out_file" "$cleaned"
 }

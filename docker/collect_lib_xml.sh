@@ -88,27 +88,26 @@ def process_list(list_node):
         base_labels = {"row": row_id}
         if attrs.get("extname"):
             base_labels["extname"] = sanitize(attrs["extname"])
-        def walk(node, path):
+        def walk(node):
             children = list(node)
             tag = sanitize(node.tag)
-            cur_path = path+[tag] if tag else path
             text = (node.text or "").strip()
             unit = node.attrib.get("unit","")
             if text:
                 if num_re.match(text):
                     labels = dict(base_labels)
-                    labels["path"] = "_".join(cur_path)
+                    labels["path"] = tag
                     if unit:
                         labels["unit"] = unit
                     emit(base_metric, labels, text)
                 else:
                     labels = dict(base_labels)
-                    labels["path"] = "_".join(cur_path)
+                    labels["path"] = tag
                     labels["text"] = text
                     emit(base_metric+"_info", labels, 1)
             for child in children:
-                walk(child, cur_path)
-        walk(row, [])
+                walk(child)
+        walk(row)
 
 lists = [n for n in root.iter() if n.tag.endswith("List")]
 if not lists:

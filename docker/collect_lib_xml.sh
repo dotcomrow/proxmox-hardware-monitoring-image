@@ -65,8 +65,12 @@ def sanitize(s: str) -> str:
 
 def labels_to_str(labels):
     parts=[]
+    def esc(v: str) -> str:
+        # Prometheus text format escaping for labels
+        return v.replace("\\", "\\\\").replace("\n", " ").replace("\r", " ").replace("\"", "\\\"")
     for k in sorted(labels):
-        v=str(labels[k]).replace('"','')
+        v=str(labels[k])
+        v=esc(v)
         parts.append(f'{k}="{v}"')
     return ",".join(parts)
 

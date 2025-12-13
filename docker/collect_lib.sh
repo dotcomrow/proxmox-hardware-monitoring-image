@@ -95,10 +95,14 @@ collect_smart_health() {
     local table_metric="smart_data_${base_label}"
     local info_metric="${table_metric}_info"
 
+    esc_model="${model//\\/\\\\}"; esc_model="${esc_model//$'\n'/ }"; esc_model="${esc_model//$'\r'/ }"; esc_model="${esc_model//\"/}"
+    esc_serial="${serial//\\/\\\\}"; esc_serial="${esc_serial//$'\n'/ }"; esc_serial="${esc_serial//$'\r'/ }"; esc_serial="${esc_serial//\"/}"
+    esc_fw="${fw//\\/\\\\}"; esc_fw="${esc_fw//$'\n'/ }"; esc_fw="${esc_fw//$'\r'/ }"; esc_fw="${esc_fw//\"/}"
+
     printf "%s{device=\"%s\",slot=\"%s\",driver=\"%s\",id=\"health\",attribute=\"health\",field=\"value\"} %s\n" "$table_metric" "$base_label" "$slot_label" "$drv_used" "${health_val}" >>"$TMP_METRICS"
-    printf "%s{device=\"%s\",slot=\"%s\",driver=\"%s\",id=\"model\",attribute=\"model\",field=\"text\",text=\"%s\"} 1\n" "$info_metric" "$base_label" "$slot_label" "$drv_used" "$model" >>"$TMP_METRICS"
-    printf "%s{device=\"%s\",slot=\"%s\",driver=\"%s\",id=\"serial\",attribute=\"serial\",field=\"text\",text=\"%s\"} 1\n" "$info_metric" "$base_label" "$slot_label" "$drv_used" "$serial" >>"$TMP_METRICS"
-    printf "%s{device=\"%s\",slot=\"%s\",driver=\"%s\",id=\"firmware\",attribute=\"firmware\",field=\"text\",text=\"%s\"} 1\n" "$info_metric" "$base_label" "$slot_label" "$drv_used" "$fw" >>"$TMP_METRICS"
+    printf "%s{device=\"%s\",slot=\"%s\",driver=\"%s\",id=\"model\",attribute=\"model\",field=\"text\",text=\"%s\"} 1\n" "$info_metric" "$base_label" "$slot_label" "$drv_used" "$esc_model" >>"$TMP_METRICS"
+    printf "%s{device=\"%s\",slot=\"%s\",driver=\"%s\",id=\"serial\",attribute=\"serial\",field=\"text\",text=\"%s\"} 1\n" "$info_metric" "$base_label" "$slot_label" "$drv_used" "$esc_serial" >>"$TMP_METRICS"
+    printf "%s{device=\"%s\",slot=\"%s\",driver=\"%s\",id=\"firmware\",attribute=\"firmware\",field=\"text\",text=\"%s\"} 1\n" "$info_metric" "$base_label" "$slot_label" "$drv_used" "$esc_fw" >>"$TMP_METRICS"
 
     awk -v table="${table_metric}" -v info="${info_metric}" -v slot="${slot_label}" -v dev="${base_label}" -v driver="${drv_used}" '
       function sanitize(s) { gsub(/[^A-Za-z0-9_]/,"_",s); s=tolower(s); gsub(/^_+|_+$/,"",s); return s }

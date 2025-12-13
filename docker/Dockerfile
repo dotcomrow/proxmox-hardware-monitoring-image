@@ -20,6 +20,7 @@ RUN dnf -y install \
     which \
     glibc-langpack-en \
     gnupg \
+    python3 \
     && dnf clean all
 
 # Create working and export directories

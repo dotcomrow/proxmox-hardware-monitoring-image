@@ -1,4 +1,5 @@
-FROM --platform=linux/amd64 rockylinux:8
+ARG OMSA_IMAGE_PLATFORM=linux/amd64
+FROM --platform=${OMSA_IMAGE_PLATFORM} rockylinux:8
 
 # OMSA binaries are only published for x86_64. Fail fast if someone tries to
 # build on another architecture (for example, Apple Silicon without --platform).
@@ -16,6 +17,7 @@ RUN dnf -y install \
     unzip \
     systemd \
     findutils \
+    logrotate \
     procps \
     which \
     glibc-langpack-en \
@@ -99,10 +101,6 @@ RUN set -eux; \
     dnf -y install smartmontools ipmitool freeipmi; \
     dnf clean all
 
-# Create dummy River config for build-time validation
-RUN echo 'server "default" { log_level = "info" } loki.write "default" { endpoint { url = "http://localhost:3100/loki/api/v1/push" } } loki.source.file "dummy" { targets = [] forward_to = [loki.write.default.receiver] }' > /etc/grafana-agent/dummy.river && \
-    /usr/bin/grafana-agent run --config.file=/etc/grafana-agent/dummy.river --help || true
-
 # Add real collector and config
 COPY collect.sh /opt/dell-exporter/collect.sh
 COPY collect_lib.sh /opt/dell-exporter/collect_lib.sh
@@ -111,8 +109,14 @@ COPY collect_lib_xml.sh /opt/dell-exporter/collect_lib_xml.sh
 COPY agent.yaml /etc/grafana-agent/agent.river
 COPY otelcol.yaml /etc/otelcol/config.yaml
 COPY ipmi_exporter.yml /etc/ipmi_exporter.yml
+COPY logrotate.conf /etc/logrotate.d/dell-hardware-exporter
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /opt/dell-exporter/collect.sh /opt/dell-exporter/collect_lib.sh /opt/dell-exporter/collect_lib_lst.sh /opt/dell-exporter/collect_lib_xml.sh /entrypoint.sh
+RUN set -eux; \
+    bash -n /entrypoint.sh /opt/dell-exporter/collect.sh /opt/dell-exporter/collect_lib.sh /opt/dell-exporter/collect_lib_lst.sh /opt/dell-exporter/collect_lib_xml.sh; \
+    /usr/bin/grafana-agent-flow fmt /etc/grafana-agent/agent.river >/dev/null; \
+    /usr/bin/otelcol-contrib validate --config /etc/otelcol/config.yaml; \
+    /usr/sbin/logrotate -d /etc/logrotate.d/dell-hardware-exporter >/dev/null 2>&1
 
 EXPOSE 12345/tcp 5514/tcp 5514/udp 4317/tcp 4318/tcp
 

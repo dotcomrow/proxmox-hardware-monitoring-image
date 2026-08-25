@@ -3,6 +3,30 @@ set -euo pipefail
 
 AGENT_CONFIG="/etc/grafana-agent/agent.river"
 OMREPORT="/opt/dell/srvadmin/bin/omreport"
+LOG_DIR="${LOG_DIR:-/var/log/dell-hardware-exporter}"
+LOGROTATE_INTERVAL_SECONDS="${LOGROTATE_INTERVAL_SECONDS:-3600}"
+LOGROTATE_STATE="${LOGROTATE_STATE:-/var/lib/logrotate/dell-hardware-exporter.status}"
+
+case "$LOGROTATE_INTERVAL_SECONDS" in
+  ''|*[!0-9]*) LOGROTATE_INTERVAL_SECONDS=3600 ;;
+esac
+
+mkdir -p "$LOG_DIR" "$(dirname "$LOGROTATE_STATE")"
+
+start_logrotate_loop() {
+  if ! command -v logrotate >/dev/null 2>&1; then
+    echo "logrotate not found; container log files will not be rotated" >&2
+    return
+  fi
+
+  (
+    while true; do
+      logrotate -s "$LOGROTATE_STATE" /etc/logrotate.d/dell-hardware-exporter \
+        >>"${LOG_DIR}/logrotate.log" 2>&1 || true
+      sleep "$LOGROTATE_INTERVAL_SECONDS"
+    done
+  ) &
+}
 
 # Inject Grafana credentials if placeholders are present (or fail fast if missing)
 if grep -Eq "GRAFANA_API_KEY_PLACEHOLDER|REPLACE_ME|GRAFANA_USERNAME_PLACEHOLDER|PROM_REMOTE_AUTH_PLACEHOLDER" "$AGENT_CONFIG" /etc/otelcol/config.yaml 2>/dev/null; then
@@ -92,11 +116,13 @@ run_omreport_probe() {
 
 # Start OMSA daemons directly (avoid DKS driver builds inside the container)
 find /opt/dell/srvadmin/var/run -maxdepth 1 -name "*.pid" -type f -delete 2>/dev/null || true
-/opt/dell/srvadmin/sbin/dsm_om_shrsvcd &
-/opt/dell/srvadmin/sbin/dsm_om_connsvcd -run &
-/opt/dell/srvadmin/sbin/dsm_sa_eventmgrd &
-/opt/dell/srvadmin/sbin/dsm_sa_datamgrd &
-/opt/dell/srvadmin/sbin/dsm_sa_snmpd &
+/opt/dell/srvadmin/sbin/dsm_om_shrsvcd >>"${LOG_DIR}/dsm_om_shrsvcd.log" 2>&1 &
+/opt/dell/srvadmin/sbin/dsm_om_connsvcd -run >>"${LOG_DIR}/dsm_om_connsvcd.log" 2>&1 &
+/opt/dell/srvadmin/sbin/dsm_sa_eventmgrd >>"${LOG_DIR}/dsm_sa_eventmgrd.log" 2>&1 &
+/opt/dell/srvadmin/sbin/dsm_sa_datamgrd >>"${LOG_DIR}/dsm_sa_datamgrd.log" 2>&1 &
+/opt/dell/srvadmin/sbin/dsm_sa_snmpd >>"${LOG_DIR}/dsm_sa_snmpd.log" 2>&1 &
+
+start_logrotate_loop
 
 # Give OMSA a moment to come up; do not hard-fail, but log readiness issues
 OMSA_READY=false
@@ -120,7 +146,7 @@ run_omreport_probe "storage controller" storage controller
 /usr/local/bin/ipmi_exporter \
   --config.file=/etc/ipmi_exporter.yml \
   --web.listen-address=:9290 \
-  >/var/log/ipmi_exporter.log 2>&1 &
+  >>"${LOG_DIR}/ipmi_exporter.log" 2>&1 &
 
 # Start collector in background loop
 echo "Starting metrics collector loop..."
@@ -129,10 +155,10 @@ echo "Starting metrics collector loop..."
     /opt/dell-exporter/collect.sh || exit $?
     sleep 60
   done
-) &
+) >>"${LOG_DIR}/collector.log" 2>&1 &
 
 # Start OTLP -> remote_write bridge (otelcol-contrib)
-/usr/bin/otelcol-contrib --config /etc/otelcol/config.yaml >/var/log/otelcol.log 2>&1 &
+/usr/bin/otelcol-contrib --config /etc/otelcol/config.yaml >>"${LOG_DIR}/otelcol.log" 2>&1 &
 
 # Optional: Fluent Bit syslog receiver -> GCP Cloud Logging
 ENABLE_SYSLOG_FORWARDING="${ENABLE_SYSLOG_FORWARDING:-false}"
@@ -198,11 +224,12 @@ if [[ "$ENABLE_SYSLOG_FORWARDING" == "true" ]]; then
 EOF
 
   echo "Starting Fluent Bit syslog receiver on ${SYSLOG_MODE} port ${SYSLOG_PORT} -> GCP project ${GCP_PROJECT_ID}"
-  "$FLUENT_BIT_BIN" -c /etc/fluent-bit/fluent-bit.conf &
+  "$FLUENT_BIT_BIN" -c /etc/fluent-bit/fluent-bit.conf >>"${LOG_DIR}/fluent-bit.log" 2>&1 &
 fi
 
 # Run Grafana Agent
 exec /usr/bin/grafana-agent-flow run \
   --storage.path=/tmp/agent \
   --server.http.listen-addr=0.0.0.0:12345 \
-  /etc/grafana-agent/agent.river
+  /etc/grafana-agent/agent.river \
+  >>"${LOG_DIR}/grafana-agent.log" 2>&1

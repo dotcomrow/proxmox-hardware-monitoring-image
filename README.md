@@ -23,6 +23,16 @@ docker run -d \
 
 The container will refuse to start if the Grafana API key placeholder is still present to avoid spamming 401s.
 
+## Runtime Logs
+
+The image keeps noisy runtime logs out of Docker's `json-file` stdout log. Collector, OMSA, Fluent Bit, OpenTelemetry Collector, IPMI exporter, and Grafana Agent output is written under:
+
+```text
+/var/log/dell-hardware-exporter/
+```
+
+Those files are rotated by logrotate daily, with 7 rotations retained and a 25MB max-size safety cap between daily rotations. The logrotate check runs inside the container once per hour by default. Override `LOG_DIR` or `LOGROTATE_INTERVAL_SECONDS` only if the deployment needs a different path or check interval.
+
 ### Optional: receive iDRAC syslog and forward to GCP Cloud Logging
 
 The image now ships with Fluent Bit to accept syslog from iDRAC (or anything else) and push it to GCP:
